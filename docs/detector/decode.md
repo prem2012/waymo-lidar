@@ -41,14 +41,16 @@ d.numpy()                          # {"boxes", "scores", "labels"} as NumPy arra
    untrained model can't produce infinite or zero sizes. Real vehicle, pedestrian and cyclist boxes
    span **0.059 – 19.7 m** (measured over all 1,000 segments), well inside the clamp.
 
-**`decode.nms: bev`** (rotated-IoU NMS per class) needs the IoU component, which comes next. Until
-then it raises `NotImplementedError`; the default `none` works. Peak picking alone is what
-CenterPoint uses for Waymo vehicles.
+6. **Optional rotated NMS** (`decode.nms: bev`): after the threshold, greedy NMS on rotated BEV IoU
+   within each frame and class, with thresholds from `decode.nms_iou` (vehicle 0.7, pedestrian 0.5,
+   cyclist 0.5). Classes never suppress each other. The whole batch goes through one
+   `nms_bev_grouped` call (see [iou.md](iou.md)). Detections stay sorted by score. The default `none`
+   (peak picking only) is what CenterPoint uses for Waymo vehicles.
 
 ## Speed
 
 RTX 4090, worst case (every frame returns the full 500 detections): **0.29 ms** for one frame,
-**0.91 ms** for a batch of 4.
+**0.91 ms** for a batch of 4. With `nms: bev`, the batch of 4 (2,000 detections) takes **3.6 ms**.
 
 ## Checks
 
@@ -76,7 +78,7 @@ confident detection to sit on a real object of its class.
 
 ## Tests
 
-`uv run pytest tests/test_det_decode.py` (12 tests, ~30 s):
+`uv run pytest tests/test_det_decode.py` (13 tests, ~30 s):
 
 - **Peaks:**
   - A single peak gives one detection at the right place, and a value below the threshold is
@@ -86,7 +88,12 @@ confident detection to sit on a real object of its class.
   - Peaks of different classes in one cell are both kept, sorted by score.
   - Top-K keeps the highest scores.
 - **Clamp:** extreme log sizes give finite sizes at the clamp bounds.
-- **NMS:** `nms: bev` raises until the IoU component exists.
+- **NMS:**
+  - `nms: bev` collapses overlapping same-class detections (4 × 2 m cars 0.8 m apart, IoU 0.667) at
+    a threshold of 0.5, and keeps both at 0.7.
+  - A different class at the same spot is never suppressed.
+  - Frames in a batch are independent.
+  - The perfect-output round trip is unchanged with NMS on.
 - **Batching:** B = 2 equals two single-frame decodes.
 - **Real data:** the perfect-output round trip (eval and augmented train), single-sample NumPy input,
   and overfit → decode finding vehicles and pedestrians (GPU).

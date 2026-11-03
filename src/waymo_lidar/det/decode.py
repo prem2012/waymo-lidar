@@ -49,9 +49,6 @@ def peak_mask(p: torch.Tensor) -> torch.Tensor:
 @torch.no_grad()
 def decode(out: dict[str, torch.Tensor], cfg: DetectorConfig) -> list[Detections]:
     dc = cfg.decode
-    if dc.nms != "none":
-        raise NotImplementedError(f"decode.nms: {dc.nms} needs rotated BEV IoU, which comes with the IoU "
-                                  f"component (det/iou.py); use decode.nms: none for now")
     p = torch.sigmoid(out["heatmap"].float())
     b, c, h, w = p.shape
     scores, idx = (p * peak_mask(p)).reshape(b, -1).topk(min(dc.topk, c * h * w), dim=1)  # sorted, descending
@@ -59,14 +56,41 @@ def decode(out: dict[str, torch.Tensor], cfg: DetectorConfig) -> list[Detections
     rows, cols = cell // w, cell % w
     reg = out["reg"].float().reshape(b, len(REG_FIELDS), h * w)
     lo, hi = math.log(SIZE_MIN), math.log(SIZE_MAX)
-    result = []
+    frames = []
     for i in range(b):
         keep = scores[i] >= dc.score_threshold
         r = reg[i][:, cell[i][keep]].T.clone()  # (N, 8)
         r[:, LOG_SIZE] = r[:, LOG_SIZE].clamp(lo, hi)
-        boxes = reg_to_boxes(rows[i][keep], cols[i][keep], r, cfg)
-        result.append(Detections(boxes=boxes.float(), scores=scores[i][keep], labels=labels[i][keep]))
-    return result
+        boxes = reg_to_boxes(rows[i][keep], cols[i][keep], r, cfg).float()
+        frames.append((boxes, scores[i][keep], labels[i][keep]))
+    if dc.nms == "bev":
+        frames = _nms(frames, dc.nms_iou)
+    return [Detections(boxes=bx, scores=sc, labels=lb) for bx, sc, lb in frames]
+
+
+def _nms(frames, thresholds: tuple[float, ...]):
+    """Rotated BEV NMS per (frame, class) for the whole batch in one pass; classes never suppress each other."""
+    from .iou import nms_bev_grouped
+
+    sizes = [len(sc) for _, sc, _ in frames]
+    if sum(sizes) == 0:
+        return frames
+    boxes = torch.cat([bx for bx, _, _ in frames])
+    scores = torch.cat([sc for _, sc, _ in frames])
+    labels = torch.cat([lb for _, _, lb in frames])
+    frame = torch.repeat_interleave(torch.arange(len(frames), device=scores.device),
+                                    torch.as_tensor(sizes, device=scores.device))
+    thr = torch.as_tensor(thresholds, device=scores.device, dtype=torch.float32)[labels]
+    keep = nms_bev_grouped(boxes, scores, frame * len(thresholds) + labels, thr)
+    kept = torch.zeros(len(scores), dtype=torch.bool, device=scores.device)
+    kept[keep] = True
+    out, start = [], 0
+    for n in sizes:  # per frame, still sorted by score (concatenation preserved each frame's order)
+        m = kept[start:start + n]
+        bx, sc, lb = boxes[start:start + n][m], scores[start:start + n][m], labels[start:start + n][m]
+        out.append((bx, sc, lb))
+        start += n
+    return out
 
 
 def perfect_outputs(batch: dict, cfg: DetectorConfig) -> dict[str, torch.Tensor]:

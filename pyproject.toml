@@ -19,7 +19,10 @@ dependencies = [
 wl = "waymo_lidar.cli:main"
 
 [dependency-groups]
-dev = ["pytest>=8"]
+dev = [
+    "pytest>=8",
+    "shapely>=2",
+]
 
 [build-system]
 requires = ["hatchling"]

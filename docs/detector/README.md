@@ -32,7 +32,7 @@ Related docs: [dataset.md](../dataset.md) (the data) and
 | Model | `det/model.py` | [model.md](model.md) | **done** |
 | Loss | `det/loss.py` | [loss.md](loss.md) | **done** |
 | Decode | `det/decode.py` | [decode.md](decode.md) | **done** |
-| IoU | `det/iou.py` | | planned |
+| IoU + NMS | `det/iou.py` | [iou.md](iou.md) | **done** |
 | Evaluation | `det/eval.py` | | planned |
 | Training | `det/train.py` | | planned |
 | Prediction + viewer | `det/predict.py`, `viz/stream.py` | | planned |

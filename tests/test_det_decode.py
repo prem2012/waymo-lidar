@@ -77,9 +77,30 @@ def test_size_clamp_keeps_boxes_finite():
     assert sizes.max().item() == pytest.approx(SIZE_MAX, rel=1e-5) and sizes.min().item() == pytest.approx(SIZE_MIN, rel=1e-5)
 
 
-def test_nms_bev_not_implemented_yet():
-    with pytest.raises(NotImplementedError, match="iou"):
-        decode(outputs({}), load_config(overrides=["decode.nms=bev"]))
+def car_outputs(heat, b=1):
+    """outputs() with every cell regressing a 4 x 2 x 1.5 m box, heading 0."""
+    out = outputs(heat, b=b)
+    out["reg"][:, 3], out["reg"][:, 4], out["reg"][:, 5] = math.log(4.0), math.log(2.0), math.log(1.5)
+    out["reg"][:, 7] = 1.0  # cos = 1 -> heading 0
+    return out
+
+
+def test_nms_bev_suppresses_same_class_duplicates_only():
+    # Two vehicle peaks 2 cells (0.8 m) apart along x, with 4 x 2 m boxes: BEV IoU = 6.4 / 9.6 = 0.667.
+    # Plus a pedestrian peak at the first vehicle's cell (other class: never suppressed).
+    out = car_outputs({(0, 0, 50, 50): 0.9, (0, 0, 50, 52): 0.8, (0, 1, 50, 50): 0.7})
+    assert len(decode(out, CFG)[0]) == 3
+    nms = decode(out, load_config(overrides=["decode.nms=bev", "decode.nms_iou=[0.5, 0.5, 0.5]"]))[0]
+    assert nms.labels.tolist() == [0, 1] and nms.scores.tolist() == pytest.approx([0.9, 0.7], rel=1e-5)
+    loose = decode(out, load_config(overrides=["decode.nms=bev", "decode.nms_iou=[0.7, 0.7, 0.7]"]))[0]
+    assert len(loose) == 3  # 0.667 < 0.7: nothing suppressed
+
+
+def test_nms_bev_batch_frames_independent():
+    heat = {(0, 0, 50, 50): 0.9, (0, 0, 50, 52): 0.8, (1, 0, 50, 50): 0.6, (1, 0, 50, 52): 0.95}
+    cfg = load_config(overrides=["decode.nms=bev", "decode.nms_iou=[0.5, 0.5, 0.5]"])
+    d0, d1 = decode(car_outputs(heat, b=2), cfg)
+    assert d0.scores.tolist() == pytest.approx([0.9], rel=1e-5) and d1.scores.tolist() == pytest.approx([0.95], rel=1e-5)
 
 
 def test_batch_matches_single_frames():
@@ -103,6 +124,9 @@ def test_perfect_outputs_roundtrip(mode, epoch):
     samples = [load_sample(ROOT, "training", SEG, int(t), CFG, mode=mode, epoch=epoch) for t in ts[[30, 150]]]
     batch = collate([tb(s) for s in samples])
     dets = decode(perfect_outputs(batch, CFG), CFG)
+    dets_nms = decode(perfect_outputs(batch, CFG), load_config(overrides=["decode.nms=bev"]))
+    for d, dn in zip(dets, dets_nms):  # GT boxes of one class don't overlap above 0.5-0.7: NMS removes nothing
+        assert torch.equal(d.labels, dn.labels) and torch.allclose(d.boxes, dn.boxes)
     for s, d in zip(samples, dets):
         _, _, _, inside = box_cells(s["boxes"], CFG)
         gt, gl = s["boxes"][inside].astype(np.float64), s["labels"][inside]
