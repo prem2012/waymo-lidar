@@ -95,18 +95,44 @@ class TargetConfig:
 
 
 @dataclass(frozen=True)
-class ModelConfig:
+class SimpleBackboneConfig:
+    """The `simple` backbone: stride-2 stem, then one stride-2 stage of residual blocks per entry."""
+
     stem_channels: int = 32
-    stage_channels: tuple[int, ...] = (64, 128, 256)
+    stage_channels: tuple[int, ...] = (64, 128, 256)  # strides 4, 8, 16
     stage_blocks: tuple[int, ...] = (2, 3, 3)
+
+
+@dataclass(frozen=True)
+class ResNetBackboneConfig:
+    """torchvision ResNet backbones (resnet18/34/50)."""
+
+    layers: tuple[int, ...] = (1, 2, 3, 4)  # ResNet layers feeding the neck; layer k has stride 2^(k+1)
+    pretrained: bool = False  # ImageNet weights, conv1 adapted to the input channels
+
+
+BACKBONES = ("simple", "resnet18", "resnet34", "resnet50")
+
+
+@dataclass(frozen=True)
+class ModelConfig:
+    backbone: Literal["simple", "resnet18", "resnet34", "resnet50"] = "simple"
+    simple: SimpleBackboneConfig = field(default_factory=SimpleBackboneConfig)  # used when backbone == simple
+    resnet: ResNetBackboneConfig = field(default_factory=ResNetBackboneConfig)  # used when backbone == resnet*
     neck_channels: int = 128
     head_channels: int = 64
     heatmap_bias: float = -2.19  # sigmoid(-2.19) ~= 0.1 initial foreground probability
 
     @property
+    def stage_strides(self) -> tuple[int, ...]:
+        """Strides of the feature maps the backbone hands to the neck."""
+        if self.backbone == "simple":
+            return tuple(2 ** (2 + i) for i in range(len(self.simple.stage_channels)))
+        return tuple(2 ** (1 + k) for k in self.resnet.layers)
+
+    @property
     def max_stride(self) -> int:
-        """Stem (stride 2) plus one stride-2 downsampling per stage."""
-        return 2 ** (1 + len(self.stage_channels))
+        return max(self.stage_strides)
 
 
 @dataclass(frozen=True)
@@ -197,8 +223,12 @@ def validate(cfg: DetectorConfig) -> DetectorConfig:
     need(all(v > 0 for v in g.voxel_size), "grid.voxel_size", f"sizes must be > 0, got {g.voxel_size}")
     nx, ny, _ = g.nx, g.ny, g.nz  # raises if a range is not a whole number of voxels
 
-    need(len(m.stage_channels) == len(m.stage_blocks) > 0, "model.stage_blocks",
-         f"need one block count per stage ({len(m.stage_channels)} stages, got {len(m.stage_blocks)})")
+    sb = m.simple
+    need(len(sb.stage_channels) == len(sb.stage_blocks) > 0, "model.simple.stage_blocks",
+         f"need one block count per stage ({len(sb.stage_channels)} stages, got {len(sb.stage_blocks)})")
+    rl = m.resnet.layers
+    need(len(rl) > 0 and list(rl) == sorted(set(rl)) and set(rl) <= {1, 2, 3, 4}, "model.resnet.layers",
+         f"must be a sorted, unique, non-empty subset of [1, 2, 3, 4], got {list(rl)}")
     s = t.out_stride
     need(s >= 2 and s & (s - 1) == 0 and s <= m.max_stride, "target.out_stride",
          f"must be a power of 2 between 2 and the backbone's max stride {m.max_stride}, got {s}")
@@ -214,12 +244,12 @@ def validate(cfg: DetectorConfig) -> DetectorConfig:
     for key, v in (("data.frame_interval_train", d.frame_interval_train), ("data.frame_interval_eval", d.frame_interval_eval),
                    ("data.shuffle_buffer", d.shuffle_buffer), ("target.max_objects", t.max_objects),
                    ("decode.topk", dec.topk), ("train.batch_size", tr.batch_size), ("train.epochs", tr.epochs),
-                   ("train.eval_every", tr.eval_every), ("model.stem_channels", m.stem_channels),
+                   ("train.eval_every", tr.eval_every), ("model.simple.stem_channels", sb.stem_channels),
                    ("model.neck_channels", m.neck_channels), ("model.head_channels", m.head_channels)):
         need(v >= 1, key, f"must be >= 1, got {v}")
     need(d.num_workers >= 0, "data.num_workers", f"must be >= 0, got {d.num_workers}")
     need(d.min_points_train >= 0, "data.min_points_train", f"must be >= 0, got {d.min_points_train}")
-    need(all(c >= 1 for c in m.stage_channels) and all(b >= 1 for b in m.stage_blocks), "model.stage_channels",
+    need(all(c >= 1 for c in sb.stage_channels) and all(b >= 1 for b in sb.stage_blocks), "model.simple.stage_channels",
          "channels and block counts must be >= 1")
 
     need(0.0 <= a.flip_y_prob <= 1.0, "augment.flip_y_prob", f"must be in [0, 1], got {a.flip_y_prob}")

@@ -31,10 +31,15 @@ target:
   min_radius: 2             # heatmap cells
 
 model:
-  stem_channels: 32         # stride 2
-  stage_channels: [64, 128, 256]   # strides 4, 8, 16
-  stage_blocks: [2, 3, 3]
-  neck_channels: 128        # merged at stride 4
+  backbone: simple          # simple | resnet18 | resnet34 | resnet50
+  simple:                   # used when backbone: simple
+    stem_channels: 32       # stride 2
+    stage_channels: [64, 128, 256]   # strides 4, 8, 16
+    stage_blocks: [2, 3, 3]
+  resnet:                   # used when backbone: resnet18 / resnet34 / resnet50
+    layers: [1, 2, 3, 4]    # ResNet layers feeding the neck (strides 4, 8, 16, 32)
+    pretrained: false       # ImageNet weights, conv1 adapted to the input channels (experimental)
+  neck_channels: 128        # merged at the output stride
   head_channels: 64
   heatmap_bias: -2.19       # initial foreground probability ~0.1
 

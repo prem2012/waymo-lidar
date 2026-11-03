@@ -36,12 +36,14 @@ save_config(cfg, "runs/my_run/config.yaml")
   bool, and `4.5` isn't accepted as an integer, but an integer is accepted for a float. Float fields
   also accept `1e-4`, which PyYAML would otherwise read as a string (it requires `1.0e-4`).
 - **Grid:** each range has min < max and is a whole number of voxels. `nx` and `ny` must be divisible
-  by the backbone's largest stride (16 with 3 stages). `out_stride` must be a power of 2 that is at
+  by the backbone's largest stride (16 for `simple`, 32 for a ResNet with `layer4`). `out_stride` must be a power of 2 that is at
   most that stride.
 - **Classes and returns:** classes must be known (`vehicle`, `pedestrian`, `sign`, `cyclist`) and
   unique. `returns` must be a non-empty subset of {1, 2}.
 - **List lengths:** `decode.nms_iou` needs one value per class, `loss.code_weights` needs 8, and
-  `model.stage_blocks` needs one value per stage.
+  `model.simple.stage_blocks` needs one value per stage.
+- **Backbone:** `model.backbone` is one of the four; `model.resnet.layers` is a sorted, unique,
+  non-empty subset of 1–4.
 - **Value ranges:** probabilities and IoUs are within [0, 1], and counts are ≥ 1.
   `eval.distance_bins` starts at 0 and increases.
 - **Optimizer:** fields for one optimizer can't be set for another. For example, `momentum` with
@@ -92,17 +94,25 @@ save_config(cfg, "runs/my_run/config.yaml")
 | `min_radius` | 2 | Smallest Gaussian radius, in heatmap cells. |
 | *derived* `cfg.target_out_size` | (376, 376) | Heatmap rows, cols. |
 
-**`model`**: network widths and depths.
+**`model`**: the network (see [model.md](model.md)). The backbone is selectable; the neck and head are
+shared by every backbone.
 
 | Field | Default | Effect |
 |---|---|---|
-| `stem_channels` | 32 | Output channels of the stride-2 stem. |
-| `stage_channels` | [64, 128, 256] | Channels of the stages at strides 4, 8 and 16. |
-| `stage_blocks` | [2, 3, 3] | Residual blocks per stage. |
-| `neck_channels` | 128 | Channels after merging the stages at stride 4. |
+| `backbone` | simple | `simple` (this project's small residual CNN) or a torchvision ResNet: `resnet18`, `resnet34`, `resnet50`. |
+| `simple.stem_channels` | 32 | Output channels of the stride-2 stem. Used when `backbone: simple`. |
+| `simple.stage_channels` | [64, 128, 256] | Channels of the stages at strides 4, 8 and 16 (one stage per entry). |
+| `simple.stage_blocks` | [2, 3, 3] | Residual blocks per stage. |
+| `resnet.layers` | [1, 2, 3, 4] | ResNet layers that feed the neck. Layer *k* has stride 2^(k+1): 4, 8, 16, 32. Used when `backbone: resnet*`. |
+| `resnet.pretrained` | false | Load ImageNet weights, with `conv1` adapted to the input channels. Experimental: RGB photos and BEV occupancy are very different. |
+| `neck_channels` | 128 | Channels of each neck branch and of the merged map at the output stride. |
 | `head_channels` | 64 | Width of the head's shared conv and branches. |
 | `heatmap_bias` | −2.19 | Initial heatmap logit (sigmoid ≈ 0.1), which stabilises early training. |
-| *derived* `max_stride` | 16 | 2^(1 + number of stages). |
+| *derived* `stage_strides` | (4, 8, 16) | Strides of the feature maps the backbone hands to the neck: (4, 8, 16, 32) for a ResNet with the default layers. |
+| *derived* `max_stride` | 16 | max(`stage_strides`): 16 for `simple`, 32 for a ResNet with `layer4`. `nx` and `ny` must be divisible by it (1504 / 32 = 47). |
+
+Only the section for the selected backbone is used. The other one can stay in the file, so switching
+is a one-line change: `--set model.backbone=resnet18`.
 
 **`loss`**
 

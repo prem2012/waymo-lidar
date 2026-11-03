@@ -15,7 +15,15 @@ def test_defaults_derive_grid_and_classes():
     assert cfg.grid.in_channels == 24
     assert cfg.target_out_size == (376, 376)
     assert cfg.data.class_ids == (1, 2, 4)
-    assert cfg.model.max_stride == 16
+    assert cfg.model.max_stride == 16 and cfg.model.stage_strides == (4, 8, 16)
+
+
+@pytest.mark.parametrize("backbone, layers, strides", [
+    ("resnet18", "[1, 2, 3, 4]", (4, 8, 16, 32)), ("resnet50", "[1, 2, 3]", (4, 8, 16)), ("resnet34", "[2, 4]", (8, 32)),
+])
+def test_resnet_backbone_strides(backbone, layers, strides):
+    cfg = load_config(overrides=[f"model.backbone={backbone}", f"model.resnet.layers={layers}"])
+    assert cfg.model.stage_strides == strides and cfg.model.max_stride == max(strides)
 
 
 def test_extra_channels():
@@ -69,7 +77,12 @@ def test_exponent_without_dot_is_a_float(tmp_path):
     (["decode.nms_iou=[0.7]"], "decode.nms_iou"),                 # one per class
     (["loss.code_weights=[1, 1]"], "loss.code_weights"),
     (["grid.z_range=[4.0, -2.0]"], "grid.z_range"),
-    (["model.stage_blocks=[2, 3]"], "model.stage_blocks"),
+    (["model.simple.stage_blocks=[2, 3]"], "model.simple.stage_blocks"),
+    (["model.backbone=resnet101"], "model.backbone"),
+    (["model.resnet.layers=[3, 1]"], "model.resnet.layers"),
+    (["model.resnet.layers=[]"], "model.resnet.layers"),
+    (["model.resnet.layers=[5]"], "model.resnet.layers"),
+    (["model.stage_blocks=[2, 3]"], "model.stage_blocks"),       # old flat key -> unknown key
     (["eval.distance_bins=[10, 30]"], "eval.distance_bins"),
     (["train.batch_size=0"], "train.batch_size"),
     (["train.precision=fp8"], "train.precision"),
