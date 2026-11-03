@@ -1,4 +1,4 @@
-"""See the voxelizer's output in Rerun: one command, one window.
+"""See the voxelizer's output (and, with --targets, the training targets) in Rerun: one command, one window.
 
     uv run python -m waymo_lidar.det.viz_voxels ~/dev/data/waymo_v2 --split training --segment <name> --frame 50
 
@@ -19,12 +19,14 @@ import rerun as rr
 import rerun.blueprint as rrb
 import torch
 
+from ..data.boxes import box_corners
 from ..data.dataset import WaymoDataset
 from ..data.types import BOX_TYPE_COLORS
 from ..viz.colors import intensity_colors, turbo
 from .config import GridConfig, load_config
 from .data import collate, complete_segments, load_sample
-from .voxelize import Voxelizer, voxel_centers
+from .targets import TargetBuilder, reg_to_boxes
+from .voxelize import Voxelizer, bev_cell_centers, voxel_centers
 
 
 def parse_frames(frame: int | None, frames: str | None, n: int) -> list[int]:
@@ -47,13 +49,56 @@ def grid_outline(grid: GridConfig) -> list[np.ndarray]:
     return [np.array(bottom), np.array(top), *verticals]
 
 
-def blueprint(multi_frame: bool) -> rrb.Blueprint:
-    return rrb.Blueprint(
-        rrb.Spatial3DView(origin="world", name="Voxels",
-                          overrides={"world/points": rrb.EntityBehavior(visible=False)}),
-        rrb.TimePanel(state="expanded" if multi_frame else "collapsed"),
-        collapse_panels=False,
-    )
+def blueprint(multi_frame: bool, target_classes: tuple[str, ...] = ()) -> rrb.Blueprint:
+    view3d = rrb.Spatial3DView(origin="world", name="Voxels",
+                               overrides={"world/points": rrb.EntityBehavior(visible=False)})
+    main = view3d
+    if target_classes:  # BEV heatmaps, one tab per class, next to the 3D view
+        bev = rrb.Tabs(*[rrb.Spatial2DView(origin=f"bev/{c}", name=f"BEV {c}") for c in target_classes],
+                       name="BEV targets")
+        main = rrb.Horizontal(view3d, bev, column_shares=[3, 2])
+    return rrb.Blueprint(main, rrb.TimePanel(state="expanded" if multi_frame else "collapsed"), collapse_panels=False)
+
+
+HEAT_TILE_MIN = 0.05  # heatmap cells drawn as 3D ground tiles
+
+
+def log_targets(rec: rr.RecordingStream, sample: dict, targets: dict, cfg) -> None:
+    """Heatmaps as BEV images (+ GT outlines and decoded centres in cell coordinates) and as 3D ground tiles."""
+    g, s = cfg.grid, cfg.target.out_stride
+    cell = (g.voxel_size[0] * s, g.voxel_size[1] * s)
+    hm, m = targets["heatmap"], targets["target_mask"].astype(bool)
+    rows, cols = np.divmod(targets["target_ind"][m], hm.shape[2])
+    reg, tcls = targets["target_reg"][m].astype(np.float64), targets["target_cls"][m]
+    cy, cx = (t.numpy() for t in bev_cell_centers(g, stride=s))
+    for ch, name in enumerate(cfg.data.classes):
+        h = hm[ch]
+        rgb = turbo(h.ravel()).reshape(*h.shape, 3)
+        rgb[h == 0] = 0
+        rec.log(f"bev/{name}/heatmap", rr.Image(rgb))
+        b = sample["boxes"][sample["labels"] == ch]
+        if len(b):  # GT outlines in cell coordinates: pixel i spans [i, i+1), matching col = floor(u)
+            c = box_corners(b[:, :3].astype(float), b[:, 3:6].astype(float), b[:, 6].astype(float))[:, :4, :2]
+            uv = np.stack([(c[..., 0] - g.x_range[0]) / cell[0], (c[..., 1] - g.y_range[0]) / cell[1]], -1)
+            rec.log(f"bev/{name}/gt", rr.LineStrips2D(np.concatenate([uv, uv[:, :1]], 1), colors=(255, 255, 255)))
+        else:
+            rec.log(f"bev/{name}/gt", rr.Clear(recursive=False))
+        k = tcls == ch
+        rec.log(f"bev/{name}/centres", rr.Points2D(np.stack([cols[k] + reg[k, 0], rows[k] + reg[k, 1]], 1),
+                                                   colors=(255, 0, 255), radii=0.6))
+        r_idx, c_idx = np.nonzero(h > HEAT_TILE_MIN)
+        if len(r_idx):
+            centers = np.stack([cx[c_idx], cy[r_idx], np.full(len(r_idx), g.z_range[0])], 1)
+            rec.log(f"world/targets/{name}", rr.Boxes3D(
+                centers=centers, half_sizes=np.broadcast_to([cell[0] / 2, cell[1] / 2, 0.01], centers.shape),
+                colors=turbo(h[r_idx, c_idx]), fill_mode="solid"))
+        else:
+            rec.log(f"world/targets/{name}", rr.Clear(recursive=False))
+    decoded = reg_to_boxes(rows, cols, reg, cfg)
+    hd = decoded[:, 6]
+    quats = np.stack([np.zeros_like(hd), np.zeros_like(hd), np.sin(hd / 2), np.cos(hd / 2)], 1)
+    rec.log("world/targets/decoded", rr.Boxes3D(centers=decoded[:, :3], half_sizes=decoded[:, 3:6] / 2,
+                                                quaternions=quats, colors=(255, 0, 255)))
 
 
 # Rerun draws at most 60,000 boxes per entity by default (a viewer setting); stay below it.
@@ -135,6 +180,7 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("--config", type=Path)
     p.add_argument("--set", nargs="*", default=[], metavar="KEY=VALUE", help="config overrides")
     p.add_argument("--as-points", action="store_true", help="draw voxels as points instead of boxes")
+    p.add_argument("--targets", action="store_true", help="also show CenterPoint training targets")
     out = p.add_mutually_exclusive_group()
     out.add_argument("--save", type=Path, help="write an .rrd instead of opening a window")
     out.add_argument("--web", action="store_true", help="serve in the browser instead of the desktop viewer")
@@ -154,7 +200,7 @@ def main(argv: list[str] | None = None) -> None:
     indices = parse_frames(a.frame, a.frames, len(ts_all))
 
     rec = rr.RecordingStream("waymo_lidar_voxels", recording_id=f"{a.segment}-{time.time_ns()}")
-    bp = blueprint(len(indices) > 1)
+    bp = blueprint(len(indices) > 1, cfg.data.classes if a.targets else ())
     if a.save:
         rec.save(a.save, default_blueprint=bp)
     elif a.web:
@@ -172,6 +218,7 @@ def main(argv: list[str] | None = None) -> None:
     vox(torch.zeros((1, 5), device=device), 1)  # warm up CUDA so the printed times are steady-state
     mode = "train" if a.augment else "eval"
     parts_used: dict[int, int] = {}
+    builder = TargetBuilder(cfg) if a.targets else None
     print(f"{a.split}/{a.segment}: {len(indices)} frame(s), {mode} mode, {cfg.grid.in_channels} channels, {device}")
     for i in indices:
         ts = int(ts_all[i])
@@ -187,6 +234,8 @@ def main(argv: list[str] | None = None) -> None:
         rec.set_time("frame", sequence=i)
         rec.set_time("frame_time", timestamp=np.datetime64(ts, "us"))
         n = log_frame(rec, sample, bev, cfg.grid, cfg.data.classes, cfg.data.class_ids, a.as_points, parts_used)
+        if builder:
+            log_targets(rec, sample, builder(sample), cfg)
         print(f"  frame {i}: {n:,} occupied voxels, {len(sample['points']):,} points, {len(sample['boxes'])} boxes, "
               f"voxelize {1000 * dt:.1f} ms")
 

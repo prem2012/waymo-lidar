@@ -28,7 +28,7 @@ Related docs: [dataset.md](../dataset.md) (the data) and
 | Config | `det/config.py`, `configs/bev_centerpoint.yaml` | [config.md](config.md) | **done** |
 | Data stream | `det/data.py` | [data.md](data.md) | **done** |
 | Voxelizer + voxel viewer | `det/voxelize.py`, `det/viz_voxels.py` | [voxelize.md](voxelize.md) | **done** |
-| Targets | `det/targets.py` | | planned |
+| Targets | `det/targets.py` | [targets.md](targets.md) | **done** |
 | Model | `det/model.py` | | planned |
 | Loss | `det/loss.py` | | planned |
 | Decode | `det/decode.py` | | planned |

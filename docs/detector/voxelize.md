@@ -143,6 +143,7 @@ entity** by default and silently drops the rest. A whole frame has ~61k voxels, 
 | `--set grid.extra_channels=true` | include the density and intensity channels (shown on hover) |
 | `--config FILE`, `--set KEY=VALUE …` | any config file and overrides |
 | `--as-points` | draw voxels as points instead of boxes |
+| `--targets` | also show the CenterPoint training targets: BEV heatmaps per class and decoded boxes (see [targets.md](targets.md#viewing-targets)) |
 | `--save out.rrd` | write a file instead of opening a window; view later with `uv run rerun out.rrd` |
 | `--web [--web-port 9090] [--no-browser]` | serve to a browser instead of the desktop viewer; prints the URL |
 
