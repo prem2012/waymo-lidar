@@ -4,7 +4,8 @@ What the data is, how it is stored, and what labels exist. Everything here was c
 actual files in `gs://waymo_open_dataset_v_2_0_1` (November 2026) or against Waymo's own definitions;
 where the two disagree, the data wins and the difference is noted under [Gotchas](#gotchas).
 
-For how this project reads the data, see [architecture.md](architecture.md).
+For how this project's analytics and viewer read the data, see
+[analytics-viewer-architecture.md](analytics-viewer-architecture.md).
 
 ---
 

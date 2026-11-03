@@ -1,7 +1,9 @@
-# Architecture — data → analytics → visualizer
+# Analytics & viewer architecture
 
 How the Waymo Parquet files flow into the analytics page and the 3D viewer: modules, data contracts,
-runtime behaviour, performance and how to extend it. For the dataset itself see [dataset.md](dataset.md).
+runtime behaviour, performance and how to extend it. This covers Phase 1 only. The `waymo_lidar.data`
+layer described here is shared, and later phases (training, evaluation) will get their own docs.
+For the dataset itself see [dataset.md](dataset.md).
 
 ---
 
@@ -94,7 +96,7 @@ flowchart LR
 waymo_lidar/
   download.sh                 staged LiDAR-only download (see dataset.md)
   pyproject.toml, uv.lock     Python 3.11; numpy, pyarrow, polars, rerun-sdk==0.41.0, fastapi, uvicorn
-  docs/                       dataset.md, architecture.md
+  docs/                       dataset.md, analytics-viewer-architecture.md
   src/waymo_lidar/
     cli.py                    `wl index`, `wl serve`
     data/                     ── reusable by later phases (training, eval) ──
