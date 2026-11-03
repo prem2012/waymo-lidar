@@ -93,12 +93,17 @@ def intersection_area(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
     return torch.where(n >= 3, area, torch.zeros_like(area))
 
 
-def _candidates(a: torch.Tensor, b: torch.Tensor, a_group: torch.Tensor | None, b_group: torch.Tensor | None
-                ) -> tuple[torch.Tensor, torch.Tensor]:
-    """Index pairs (ia, ib) whose circumscribed circles overlap (and, with groups, share a group)."""
+def _candidates(a: torch.Tensor, b: torch.Tensor, a_group: torch.Tensor | None, b_group: torch.Tensor | None,
+                min_reach: float = 0.0) -> tuple[torch.Tensor, torch.Tensor]:
+    """Index pairs (ia, ib) whose circumscribed circles overlap, or whose centres are within `min_reach` m
+    (and, with groups, that share a group)."""
     ra, rb = torch.linalg.norm(a[:, 3:5], dim=1) / 2, torch.linalg.norm(b[:, 3:5], dim=1) / 2
+
+    def reach(i, j):
+        return torch.clamp_min((ra[i, None] + rb[None, j]).double(), min_reach) + 1e-6
+
     if a_group is None:
-        close = torch.cdist(a[:, :2].double(), b[:, :2].double()) < (ra[:, None] + rb[None]).double() + 1e-6
+        close = torch.cdist(a[:, :2].double(), b[:, :2].double()) < reach(slice(None), slice(None))
         return torch.nonzero(close, as_tuple=True)
     # Grouped (e.g. many frames): enumerate pairs only within each group, then distance-filter in chunks.
     ga, oa = torch.sort(a_group, stable=True)
@@ -113,7 +118,7 @@ def _candidates(a: torch.Tensor, b: torch.Tensor, a_group: torch.Tensor | None, 
             continue
         ia = oa[sa[g]:sa[g] + na[g]]
         ib = ob[sb[g]:sb[g] + nb[g]]
-        close = torch.cdist(a[ia, :2].double(), b[ib, :2].double()) < (ra[ia, None] + rb[None, ib]).double() + 1e-6
+        close = torch.cdist(a[ia, :2].double(), b[ib, :2].double()) < reach(ia, ib)
         i, j = torch.nonzero(close, as_tuple=True)
         out_a.append(ia[i])
         out_b.append(ib[j])
@@ -123,8 +128,12 @@ def _candidates(a: torch.Tensor, b: torch.Tensor, a_group: torch.Tensor | None, 
     return torch.cat(out_a), torch.cat(out_b)
 
 
-def overlapping_pairs(a, b, a_group=None, b_group=None):
-    """Sparse IoUs of every pair that can overlap: (ia, ib, bev_iou, iou_3d). Groups keep frames apart."""
+def overlapping_pairs(a, b, a_group=None, b_group=None, min_reach: float = 0.0):
+    """Sparse IoUs of every pair that can overlap: (ia, ib, bev_iou, iou_3d). Groups keep frames apart.
+
+    `min_reach` (m) also keeps pairs whose centres are that close even if they can't overlap (their IoU is 0);
+    the evaluator uses it so one search serves both IoU and centre-distance matching.
+    """
     a, np_in = _as_tensor(a)
     b, _ = _as_tensor(b, a.device)
     a, b = a.float(), b.float()
@@ -132,7 +141,7 @@ def overlapping_pairs(a, b, a_group=None, b_group=None):
         a_group, _ = _as_tensor(a_group, a.device)
         b_group, _ = _as_tensor(b_group, a.device)
         a_group, b_group = a_group.long(), b_group.long()
-    ia, ib = _candidates(a, b, a_group, b_group)
+    ia, ib = _candidates(a, b, a_group, b_group, min_reach)
     inter = torch.cat([intersection_area(a[ia[k:k + PAIR_CHUNK]], b[ib[k:k + PAIR_CHUNK]])
                        for k in range(0, len(ia), PAIR_CHUNK)]) if len(ia) else a.new_zeros(0)
     area_a, area_b = a[ia, 3] * a[ia, 4], b[ib, 3] * b[ib, 4]

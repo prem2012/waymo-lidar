@@ -138,8 +138,10 @@ is a one-line change: `--set model.backbone=resnet18`.
 
 | Field | Default | Effect |
 |---|---|---|
-| `iou_thresholds` | [0.5, 0.7, 0.8] | AP is reported at each threshold, for both BEV and 3D IoU. |
+| `iou_thresholds` | [0.5, 0.7, 0.8] | IoU-based AP is reported at each threshold, for both BEV and 3D IoU. |
 | `distance_bins` | [0, 30, 50, 75] | Edges of the distance breakdown (m, xy distance from ego). |
+| `center_distances` | [0.5, 1.0] | Centre-distance AP thresholds in metres; `[]` turns distance AP off. See [eval.md](eval.md). |
+| `min_points` | 1 | GT boxes with fewer top-LiDAR points are ignored (neither missed nor matched). |
 
 **`optim`**: the optimizer, built by `build_optimizer`.
 

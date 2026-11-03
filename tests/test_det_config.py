@@ -99,6 +99,8 @@ def test_exponent_without_dot_is_a_float(tmp_path):
     (["optim.name=sgd", "optim.betas=null", "optim.momentum=0", "optim.nesterov=true"], "optim.nesterov"),
     (["optim.lr=0"], "optim.lr"),
     (["loss.reg_loss=l2"], "loss.reg_loss"),
+    (["eval.center_distances=[0.5, 0]"], "eval.center_distances"),
+    (["eval.min_points=-1"], "eval.min_points"),
     (["loss.smooth_l1_beta=0.1"], "loss.smooth_l1_beta"),                      # only with smooth_l1
     (["loss.reg_loss=smooth_l1", "loss.smooth_l1_beta=0"], "loss.smooth_l1_beta"),
 ])

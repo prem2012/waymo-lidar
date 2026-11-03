@@ -19,7 +19,7 @@ Related docs: [dataset.md](../dataset.md) (the data) and
 | Backbone | selectable: `simple` (2D residual CNN: stem stride 2, stages at strides 4 / 8 / 16) or torchvision `resnet18` / `resnet34` / `resnet50`; a shared neck merges every level back to stride 4 | Downsampling early keeps memory manageable at 1504². The standard ResNets are there to compare against. |
 | Head | CenterPoint at stride 4 (376 × 376, 0.4 m cells): per-class heatmap + offset, z, log size, sin/cos heading | Anchor-free and simple to decode. A 0.4 m cell is fine enough for pedestrians. |
 | Classes | vehicle, pedestrian, cyclist | The three classes Waymo ranks. |
-| Metrics | BEV AP and 3D AP at IoU 0.5 / 0.7 / 0.8, per class and distance bin | Chosen for this project. Ground-truth boxes with 0 top-LiDAR points don't count. |
+| Metrics | BEV AP and 3D AP at IoU 0.5 / 0.7 / 0.8, and centre-distance AP at 0.5 / 1.0 m, per class and distance bin | Chosen for this project. Ground-truth boxes with 0 top-LiDAR points don't count. |
 
 ## Components
 
@@ -33,6 +33,6 @@ Related docs: [dataset.md](../dataset.md) (the data) and
 | Loss | `det/loss.py` | [loss.md](loss.md) | **done** |
 | Decode | `det/decode.py` | [decode.md](decode.md) | **done** |
 | IoU + NMS | `det/iou.py` | [iou.md](iou.md) | **done** |
-| Evaluation | `det/eval.py` | | planned |
+| Evaluation | `det/eval.py` | [eval.md](eval.md) | **done** |
 | Training | `det/train.py` | | planned |
 | Prediction + viewer | `det/predict.py`, `viz/stream.py` | | planned |

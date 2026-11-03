@@ -157,6 +157,8 @@ class DecodeConfig:
 class EvalConfig:
     iou_thresholds: tuple[float, ...] = (0.5, 0.7, 0.8)
     distance_bins: tuple[float, ...] = (0.0, 30.0, 50.0, 75.0)  # metres, xy distance from ego
+    center_distances: tuple[float, ...] = (0.5, 1.0)  # metres: centre-distance AP thresholds (empty = off)
+    min_points: int = 1  # GT with fewer top-LiDAR points is ignored (don't care)
 
 
 OPTIMIZERS = ("adamw", "adam", "sgd")
@@ -273,6 +275,9 @@ def validate(cfg: DetectorConfig) -> DetectorConfig:
 
     need(len(ev.iou_thresholds) > 0 and all(0 < v <= 1 for v in ev.iou_thresholds), "eval.iou_thresholds",
          f"values must be in (0, 1], got {list(ev.iou_thresholds)}")
+    need(all(d > 0 for d in ev.center_distances), "eval.center_distances",
+         f"values must be > 0, got {list(ev.center_distances)}")
+    need(ev.min_points >= 0, "eval.min_points", f"must be >= 0, got {ev.min_points}")
     bins = ev.distance_bins
     need(len(bins) >= 2 and bins[0] == 0 and all(b2 > b1 for b1, b2 in zip(bins, bins[1:])), "eval.distance_bins",
          f"must start at 0 and increase, got {list(bins)}")

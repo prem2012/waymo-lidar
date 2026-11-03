@@ -59,6 +59,8 @@ decode:
 eval:
   iou_thresholds: [0.5, 0.7, 0.8]   # BEV and 3D AP at each
   distance_bins: [0, 30, 50, 75]    # metres
+  center_distances: [0.5, 1.0]      # centre-distance AP thresholds, metres ([] = off)
+  min_points: 1                     # GT boxes with fewer top-LiDAR points are ignored
 
 optim:
   name: adamw               # adamw | adam | sgd
