@@ -153,6 +153,10 @@ How it works:
 
 ### Geometry (`range_image.py`, `boxes.py`)
 
+All decoded points and boxes are in the **vehicle frame at the frame timestamp**: x forward, y left,
+z up, origin on the ground and most likely below the rear axle. See
+[dataset.md → Coordinate frames](dataset.md#coordinate-frames) for the definition and the evidence.
+
 ```python
 pcs = frame_to_points(fr, seg.calibration, seg.pose_at(fr.timestamp))
 pcs[(Laser.TOP, 1)]      # PointCloud: xyz (N,3) f32 vehicle frame, intensity, elongation, nlz, range

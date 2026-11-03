@@ -131,9 +131,48 @@ This project downloads `lidar`, `lidar_pose`, `lidar_calibration`, `lidar_box`, 
 
 | Frame | Definition |
 |---|---|
-| **Vehicle** | **x forward, y left, z up** (right-handed), origin at ground level (box bottoms sit at z ≈ 0). Boxes and decoded points are in this frame. |
+| **Vehicle** | Fixed to the ego car. **x forward, y left, z up**, right-handed. The origin is **on the ground** (verified) and **most likely below the centre of the rear axle** (inferred, see below). 3D boxes are labelled in this frame, and this project's decoded points are expressed in it at the frame timestamp. |
 | **Sensor** | Each LiDAR and camera has its own frame; the calibration `extrinsic` is the 4×4 `vehicle_from_sensor`. |
 | **World** | A fixed global frame. `vehicle_pose` gives `world_from_vehicle` per frame. Translations are large (thousands of metres), so subtract a reference pose before working in float32. |
+
+### Where the vehicle-frame origin is
+
+Waymo documents the axes but not the origin. The
+[Perception dataset page](https://waymo.com/open/data/perception/) only says the frame is
+right-handed with z up. The [End-to-End dataset page](https://waymo.com/open/data/e2e/) says "ego
+vehicle's center", but that describes a different dataset. From the data:
+
+- **Height: ground level, verified.** The most common ground-point height 3–6 m from the car is
+  z = +0.01 m, and box bottoms sit at z ≈ 0.
+- **Along x: most likely the rear axle, inferred.** The LiDAR mounting positions from
+  `lidar_calibration` (identical in all checked segments):
+
+  | LiDAR | x | y | z (m) | Where on the car |
+  |---|---:|---:|---:|---|
+  | `TOP` | +1.43 | 0.00 | +2.18 | roof |
+  | `FRONT` | +4.07 | 0.00 | +0.69 | front bumper |
+  | `SIDE_LEFT` | +3.25 | +1.02 | +0.98 | front-left corner |
+  | `SIDE_RIGHT` | +3.25 | −1.02 | +0.98 | front-right corner |
+  | `REAR` | −1.16 | 0.00 | +0.46 | rear bumper |
+
+  The bumper LiDARs put the car about 5.2 m long, with the origin about 1.1 m in front of the rear
+  bumper and 4.1 m behind the front. That fits a rear-axle origin on a car this size. The car's
+  geometric centre would be about 2.6 m from either end, so it isn't that.
+- **Across y:** the origin is on the car's centreline. The front, top and rear LiDARs are at y = 0,
+  and the side LiDARs are symmetric about it.
+
+### Points "at the frame timestamp"
+
+A top-LiDAR sweep takes ~0.1 s, so the car moves during it. To put every point in the vehicle frame
+*as it was at the frame timestamp*, `range_image_to_points` does:
+
+1. range image pixel → sensor frame
+2. → vehicle frame, using the extrinsic
+3. → world, using that pixel's own pose from `lidar_pose` (where the car was when the laser fired)
+4. → vehicle frame at the frame timestamp, using the inverse of `vehicle_pose`
+
+Steps 3–4 are the rolling-shutter correction. The short-range LiDARs have no per-pixel pose, so they
+use steps 1–2 only. Boxes are labelled at the frame timestamp, so points and boxes line up.
 
 **Box heading** is the rotation about +z that turns +x onto the box's front face, in [-π, π).
 Heading 0 means the box faces the same way as the ego vehicle.

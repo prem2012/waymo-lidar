@@ -20,14 +20,15 @@ DEST="${3:-$HOME/dev/data/waymo_v2}"
 #   stats             per-segment metadata: time of day, weather, location, object counts
 COMPONENTS=(lidar lidar_calibration lidar_pose vehicle_pose lidar_box stats)
 
-# Segment list comes from the small lidar_box component.
-mapfile -t SEGS < <(gsutil ls "$BUCKET/$SPLIT/lidar_box/" | xargs -n1 basename | sort)
+# Segment list comes from the small lidar_box component. Keep only *.parquet: the listing also has
+# directory placeholder entries and a _metadata file.
+mapfile -t SEGS < <(gcloud storage ls "$BUCKET/$SPLIT/lidar_box/" | grep '\.parquet$' | xargs -n1 basename | sort)
 [[ "$N" == "all" ]] || SEGS=("${SEGS[@]:0:$N}")
 echo "Split=$SPLIT  segments=${#SEGS[@]}  dest=$DEST"
 
 for c in "${COMPONENTS[@]}"; do
   mkdir -p "$DEST/$SPLIT/$c"
   printf "%s\n" "${SEGS[@]}" | sed "s|^|$BUCKET/$SPLIT/$c/|" \
-    | gsutil -m cp -n -I "$DEST/$SPLIT/$c/"   # -n: skip existing, so reruns resume
+    | gcloud storage cp -n -I "$DEST/$SPLIT/$c/"   # parallel by default; -n: skip existing, so reruns resume
 done
 du -sh "$DEST/$SPLIT"/*

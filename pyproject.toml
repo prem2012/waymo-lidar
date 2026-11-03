@@ -10,6 +10,8 @@ dependencies = [
     "rerun-sdk==0.41.0",
     "fastapi>=0.115",
     "uvicorn>=0.32",
+    "torch>=2.15.0",
+    "pyyaml>=6.0.3",
 ]
 
 [project.scripts]
