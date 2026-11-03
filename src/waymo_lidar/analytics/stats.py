@@ -26,8 +26,9 @@ class Stats:
         read = lambda kind: pl.read_parquet(idx / kind / "*.parquet")  # noqa: E731
         self.segments = read("segments").sort("split", "segment")
         self.boxes = read("boxes").with_columns(
-            # Waymo eval: unset difficulty -> L2 if <= 5 points, else L1.
-            pl.when((pl.col("difficulty") == 2) | (pl.col("num_points") <= 5)).then(pl.lit("L2"))
+            # Waymo 3D detection eval: 0 points -> not evaluated; L2 if 1-5 points or marked LEVEL_2; else L1.
+            pl.when(pl.col("num_points") == 0).then(pl.lit("ignored"))
+            .when((pl.col("difficulty") == 2) | (pl.col("num_points") <= 5)).then(pl.lit("L2"))
             .otherwise(pl.lit("L1")).alias("level")
         )
         self.points = read("points")

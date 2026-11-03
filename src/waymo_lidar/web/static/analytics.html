@@ -27,7 +27,7 @@
     <div class="tiles" id="ov-tiles"></div>
     <div class="grid" style="margin-top:14px">
       <div class="card"><h3>Per split</h3><div class="scroll" id="ov-splits"></div></div>
-      <div class="card"><h3>Per class <span class="hint">L2 = labelled L2 or ≤ 5 points (Waymo eval rule)</span></h3><div class="scroll" id="ov-classes"></div></div>
+      <div class="card"><h3>Per class <span class="hint">Waymo eval: L2 = 1–5 points or labelled L2; 0-point boxes are not evaluated</span></h3><div class="scroll" id="ov-classes"></div></div>
     </div>
   </section>
 
@@ -36,7 +36,7 @@
     <p class="lede">Class balance and box geometry. Box sizes set anchor / size priors; heading shows orientation bias.</p>
     <div class="grid">
       <div class="card"><h3>Boxes per class and split</h3><div class="chart" id="lb-split"></div></div>
-      <div class="card"><h3>Difficulty per class</h3><div class="chart" id="lb-level"></div></div>
+      <div class="card"><h3>Difficulty per class <span class="hint">0-point boxes not evaluated</span></h3><div class="chart" id="lb-level"></div></div>
     </div>
     <div class="card" style="margin-top:14px"><h3>Box size <span class="hint">metres, central 99%</span>
       <select id="lb-dim"><option>length</option><option>width</option><option>height</option></select></h3>
@@ -140,7 +140,7 @@ function renderOverview(d) {
     { key: "type", label: "Class", fmt: (v) => swatch(colors[v], v) },
     { key: "boxes", label: "Boxes", fmt: int }, { key: "objects", label: "Objects", fmt: int },
     { key: "L1", label: "L1", fmt: int }, { key: "L2", label: "L2", fmt: int },
-    { key: "empty", label: "0 points", fmt: (v, r) => `${fmt(v)} <span class="muted">(${pct(v / r.boxes)})</span>` },
+    { key: "empty", label: "0 points (not evaluated)", fmt: (v, r) => `${fmt(v)} <span class="muted">(${pct(v / r.boxes)})</span>` },
   ], d.class_counts);
 }
 
@@ -151,8 +151,8 @@ function renderLabels(d) {
     x: d.classes, y: d.classes.map((c) => (d.by_split.find((r) => r.split === s && r.type === c) || {}).boxes || 0),
   })), { barmode: "group" });
   const cc = Object.fromEntries(d.class_counts.map((r) => [r.type, r]));
-  plot("lb-level", [["L1", "#2a78d6"], ["L2", "#9fb8d8"]].map(([lvl, col]) => ({
-    type: "bar", name: lvl, marker: { color: col }, x: d.classes, y: d.classes.map((c) => cc[c][lvl]),
+  plot("lb-level", [["L1", "#2a78d6", "L1"], ["L2", "#9fb8d8", "L2"], ["empty", "#8a93a3", "not evaluated"]].map(([key, col, name]) => ({
+    type: "bar", name, marker: { color: col }, x: d.classes, y: d.classes.map((c) => cc[c][key]),
   })), { barmode: "stack" });
 
   const dim = $("lb-dim").value;

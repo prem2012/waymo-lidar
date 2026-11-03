@@ -22,7 +22,7 @@ class Boxes:
     type: np.ndarray  # (N,) int8, see types.BoxType
     num_points: np.ndarray  # (N,) int64, all LiDARs (from the dataset)
     num_top_points: np.ndarray  # (N,) int64, top LiDAR only
-    difficulty: np.ndarray  # (N,) int8, detection difficulty (1 = L1, 2 = L2)
+    difficulty: np.ndarray  # (N,) int8, detection difficulty: 0 = unset, 2 = LEVEL_2 (1 is never stored)
     speed: np.ndarray  # (N, 3) float64, m/s
 
     def __len__(self) -> int:
@@ -39,6 +39,9 @@ class Boxes:
         def num(field: str) -> np.ndarray:
             return t.column(col(_C, field)).to_numpy()
 
+        # Difficulty is null when unset (only LEVEL_2 is stored explicitly); map null -> 0 (UNKNOWN).
+        difficulty = t.column(col(_C, "difficulty_level.detection")).fill_null(0).to_numpy().astype(np.int8)
+
         def vec(prefix: str) -> np.ndarray:
             return np.stack([num(f"{prefix}.{a}") for a in "xyz"], axis=1)
 
@@ -51,7 +54,7 @@ class Boxes:
             type=num("type"),
             num_points=num("num_lidar_points_in_box"),
             num_top_points=num("num_top_lidar_points_in_box"),
-            difficulty=num("difficulty_level.detection"),
+            difficulty=difficulty,
             speed=vec("speed"),
         )
 
