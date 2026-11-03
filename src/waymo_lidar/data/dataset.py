@@ -19,6 +19,7 @@ from .types import SPLITS, Laser
 KEY_SEGMENT = "key.segment_context_name"
 KEY_TS = "key.frame_timestamp_micros"
 KEY_LASER = "key.laser_name"
+STREAM_FRAMES = 8  # frames per record batch when streaming lidar / lidar_pose (see iter_range_images)
 
 
 def col(component: str, field: str) -> str:
@@ -56,6 +57,26 @@ class FrameRangeImages:
     images: dict[tuple[int, int], np.ndarray]
     # (H, W, 6) float32 per-pixel world_from_vehicle pose (roll, pitch, yaw, x, y, z) for the top LiDAR
     top_pose: np.ndarray | None
+
+
+def _row_groups_with(pf: pq.ParquetFile, column: str, wanted: set[int] | None) -> list[int]:
+    """Row groups whose [min, max] statistics for `column` contain at least one wanted value (all if None).
+
+    Rows are sorted by timestamp and a frame can straddle two consecutive groups; both are kept, and the
+    reader's frame assembly joins them. Groups without statistics are always read.
+    """
+    groups = range(pf.num_row_groups)
+    if wanted is None:
+        return list(groups)
+    md = pf.metadata
+    idx = [md.schema.column(i).path for i in range(md.num_columns)].index(column)
+    w = np.fromiter(wanted, dtype=np.int64)
+    keep = []
+    for g in groups:
+        st = md.row_group(g).column(idx).statistics
+        if st is None or not st.has_min_max or np.any((w >= st.min) & (w <= st.max)):
+            keep.append(g)
+    return keep
 
 
 class WaymoDataset:
@@ -160,8 +181,13 @@ class Segment:
     ) -> Iterator[FrameRangeImages]:
         """Yield range images frame by frame, in time order.
 
-        Reads the LiDAR file one row group at a time, so the first frame is available quickly and
-        memory stays bounded. ``timestamps`` restricts which frames are decoded.
+        Streams the LiDAR file in small record batches (``STREAM_FRAMES`` frames each), so the first
+        frame is available quickly and memory stays bounded. ``timestamps`` restricts which frames are
+        kept, and skips row groups that hold none of them.
+
+        Batches, not whole row groups: a row group is ~50 frames whose range images are ~10x larger
+        decoded than on disk (Brotli), and the decoder's transient buffers are a multiple of that again.
+        Reading row groups whole peaked at ~8 GiB per stream; batches keep it near 2 GiB at the same speed.
         """
         returns = tuple(returns)
         lasers = set(Laser) if lasers is None else {int(l) for l in lasers}
@@ -171,12 +197,12 @@ class Segment:
         for r in returns:
             columns += [col(c, f"range_image_return{r}.values"), col(c, f"range_image_return{r}.shape")]
 
-        top_pose = self._top_pose_reader() if Laser.TOP in lasers else None
+        top_pose = self._top_pose_reader(wanted) if Laser.TOP in lasers else None
 
         pf = pq.ParquetFile(self.path("lidar"))
         pending: FrameRangeImages | None = None
-        for g in range(pf.num_row_groups):
-            t = pf.read_row_group(g, columns=columns)
+        for t in pf.iter_batches(batch_size=STREAM_FRAMES * len(Laser), columns=columns,
+                                 row_groups=_row_groups_with(pf, KEY_TS, wanted)):
             ts = t.column(KEY_TS).to_numpy()
             ln = t.column(KEY_LASER).to_numpy()
             data = {}
@@ -198,18 +224,22 @@ class Segment:
         if pending is not None:
             yield pending
 
-    def _top_pose_reader(self):
-        """Returns ts -> (H, W, 6) top-LiDAR pixel pose (return 1 pose applies to both returns)."""
+    def _top_pose_reader(self, wanted: set[int] | None = None):
+        """Returns ts -> (H, W, 6) top-LiDAR pixel pose (return 1 pose applies to both returns).
+
+        Keeps only the `wanted` frames (all if None). The file is streamed in batches like the LiDAR
+        file: decoded whole it is ~730 MiB of floats per segment and peaked at ~3 GiB.
+        """
         c = "LiDARPose"
-        t = self.read("lidar_pose", columns=[KEY_TS, KEY_LASER, col(c, "range_image_return1.values"),
-                                             col(c, "range_image_return1.shape")])
-        ts = t.column(KEY_TS).to_numpy()
-        vals, offs = list_column(t.column(col(c, "range_image_return1.values")))
-        shapes = list_column(t.column(col(c, "range_image_return1.shape")))[0].reshape(-1, 3)
-        index = {int(v): i for i, v in enumerate(ts)}
-
-        def get(frame_ts: int) -> np.ndarray | None:
-            i = index.get(frame_ts)
-            return None if i is None else vals[offs[i]:offs[i + 1]].reshape(shapes[i])
-
-        return get
+        cols = [KEY_TS, col(c, "range_image_return1.values"), col(c, "range_image_return1.shape")]
+        pf = pq.ParquetFile(self.path("lidar_pose"))
+        poses: dict[int, np.ndarray] = {}
+        for b in pf.iter_batches(batch_size=STREAM_FRAMES, columns=cols,
+                                 row_groups=_row_groups_with(pf, KEY_TS, wanted)):
+            ts = b.column(KEY_TS).to_numpy()
+            vals, offs = list_column(b.column(cols[1]))
+            shapes = list_column(b.column(cols[2]))[0].reshape(-1, 3)
+            for i, frame_ts in enumerate(ts):
+                if wanted is None or int(frame_ts) in wanted:  # copy: don't pin the whole batch
+                    poses[int(frame_ts)] = vals[offs[i]:offs[i + 1]].reshape(shapes[i]).copy()
+        return poses.get

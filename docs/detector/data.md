@@ -127,14 +127,27 @@ Measured on the stage-1 segments (32-core machine, NVMe):
 | Boxes per frame | ~40–45 (three classes) |
 | Read range images | 96 ms per sampled frame (3.8 s per segment at interval 5) |
 | Decode to points | 23 ms per frame |
-| Throughput | ~10.6 frames/s per worker → ~125 frames/s with 12 workers (estimated) |
-| Memory | ~2.3 MB per buffered frame → ~3.5 GB for 12 workers × 128 |
+| Throughput | ~10.6 frames/s per worker in isolation. Measured with 12 workers and targets: ~33 frames/s (see below) |
+| Memory | ~2.3 GiB RSS per worker (reader + shuffle buffer) + ~1.1 GiB main → ~26 GiB for 12 workers |
 
 **Reading is the bottleneck.** Each `lidar` row group stores all five LiDARs, and Parquet can't skip
 rows within a row group, so the short-range LiDARs are read and thrown away. Their range images are
 mostly empty but larger in total than the top LiDAR's (4 × 200 × 600 vs 64 × 2650 pixels). At
 ~125 frames/s this is still well ahead of what the model will consume. If it ever becomes the limit,
 the fix is a one-time conversion to top-LiDAR-only files.
+
+**Memory is set by decoding, not by the shuffle buffer.** The range images are Brotli-compressed ~10×
+(a 42 MiB row-group column is 392 MiB decoded; a segment's `lidar_pose` is 28 MiB on disk and 732 MiB
+decoded), and the Parquet decoder's transient buffers are a multiple of that again. Reading whole row
+groups, plus all of `lidar_pose` at once, peaked at ~8 GiB per worker, and the Arrow memory pool keeps
+its peak. 12 workers needed ~90 GB and the OOM killer took the machine's desktop down with it. The reader
+now streams both files in 8-frame record batches and keeps only the wanted frames' poses: ~2.3 GiB per
+worker, same speed, identical output. Size `data.num_workers` by that figure.
+
+**Measured loader throughput is below the estimate.** 12 workers with targets delivered ~33 frames/s
+in steady state on a 32-thread i9-13900K, under the ~49 frames/s the GPU trains at (`simple` backbone,
+batch 4). Not yet investigated; the Arrow thread pool in every worker (oversubscription) is the first
+suspect. Watch `train/data_wait_frac`.
 
 ## Tests
 

@@ -142,10 +142,12 @@ How it works:
 
 - **Segment discovery** lists `<split>/lidar_box/*.parquet` (or `lidar/` if that's missing). A split is
   any of `training`, `validation` or `testing` that exists under the root.
-- **`iter_range_images`** reads the `lidar` file **one Parquet row group at a time**, about 50 frames
-  per group. This keeps memory bounded and gets the first frame out quickly. Rows are sorted by
-  timestamp with 5 LiDARs per frame. A frame is emitted when the timestamp changes, so a frame split
-  across two row groups is still handled.
+- **`iter_range_images`** streams the `lidar` file in **record batches of 8 frames** (a row group holds
+  about 50), skipping row groups that hold none of the requested timestamps. This keeps memory near
+  2 GiB (whole row groups peaked at ~8 GiB: the range images are ~10× larger decoded) and gets the
+  first frame out quickly. Rows are sorted by timestamp with 5 LiDARs per frame. A frame is emitted
+  when the timestamp changes, so a frame split across two batches or row groups is still handled. The
+  top LiDAR's pixel poses (`lidar_pose`) are streamed the same way, keeping only the requested frames.
 - **List columns** are converted to NumPy without per-row Python objects. `list_column()` returns the
   flat values plus an offsets array, and each row is a slice of that buffer, so nothing is copied.
   Fixed-size lists (shapes, 4×4 transforms) are handled too.
@@ -274,7 +276,7 @@ sequenceDiagram
   A-->>B: {viewer_url: http://localhost:9090/?url=rerun+http://127.0.0.1:P/proxy, ...}
   B->>V: iframe.src = viewer_url (fresh viewer, old one freed)
   V->>G: connect
-  loop each frame (row group by row group)
+  loop each frame (8-frame record batches)
     W->>W: decode range images → points, look up boxes
     W->>G: log transform, points, boxes
     G-->>V: stream
@@ -366,8 +368,8 @@ Firewall them if that matters.
   per-segment pre-aggregation in `index.py`, or memoise each section's result.
 - **Viewer memory is ~0.5 GB per segment.** Options if it's a problem: log every 2nd frame,
   downsample the top LiDAR, or send intensity as a scalar instead of an RGB colour.
-- **The first frame takes ~1.8 s,** mostly from reading the first row group of `lidar` (about 50
-  frames). Reading a smaller first batch would cut that.
+- **The first frame took ~1.8 s** when `lidar` was read a whole row group (about 50 frames) at a
+  time. It is now read in 8-frame batches; that figure hasn't been re-measured.
 - **One viewer stream at a time.** `Streamer` holds a single active segment for the whole server.
   That's fine for one user; it isn't designed for several.
 - **Rerun ports are exposed on the LAN** (see Ports above).
