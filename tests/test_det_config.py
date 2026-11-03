@@ -101,6 +101,9 @@ def test_exponent_without_dot_is_a_float(tmp_path):
     (["loss.reg_loss=l2"], "loss.reg_loss"),
     (["eval.center_distances=[0.5, 0]"], "eval.center_distances"),
     (["eval.min_points=-1"], "eval.min_points"),
+    (["train.lr_schedule=step"], "train.lr_schedule"),
+    (["train.warmup_frac=1.0"], "train.warmup_frac"),
+    (["train.best_metric=loss/total"], "train.best_metric"),
     (["loss.smooth_l1_beta=0.1"], "loss.smooth_l1_beta"),                      # only with smooth_l1
     (["loss.reg_loss=smooth_l1", "loss.smooth_l1_beta=0"], "loss.smooth_l1_beta"),
 ])

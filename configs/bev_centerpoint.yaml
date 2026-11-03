@@ -76,3 +76,8 @@ train:
   eval_every: 2             # epochs
   seed: 0
   runs_dir: runs
+  lr_schedule: onecycle     # onecycle (warm up to optim.lr, then cosine down) | cosine | constant
+  warmup_frac: 0.4          # onecycle: fraction of steps spent warming up
+  log_every: 50             # steps between TensorBoard writes
+  val_max_frames: 0         # validation frames per pass (0 = all)
+  best_metric: eval/bev_ap@0.7/mean   # selects checkpoints/best.pt (higher is better)

@@ -34,5 +34,5 @@ Related docs: [dataset.md](../dataset.md) (the data) and
 | Decode | `det/decode.py` | [decode.md](decode.md) | **done** |
 | IoU + NMS | `det/iou.py` | [iou.md](iou.md) | **done** |
 | Evaluation | `det/eval.py` | [eval.md](eval.md) | **done** |
-| Training | `det/train.py` | | planned |
+| Training | `det/train.py` | [training.md](training.md) | **done** |
 | Prediction + viewer | `det/predict.py`, `viz/stream.py` | | planned |

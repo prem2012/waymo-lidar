@@ -187,6 +187,11 @@ class TrainConfig:
     eval_every: int = 2  # epochs
     seed: int = 0
     runs_dir: str = "runs"
+    lr_schedule: Literal["onecycle", "cosine", "constant"] = "onecycle"
+    warmup_frac: float = 0.4  # onecycle: fraction of steps spent warming up to optim.lr
+    log_every: int = 50  # steps between TensorBoard scalar writes
+    val_max_frames: int = 0  # validation frames per pass (0 = all)
+    best_metric: str = "eval/bev_ap@0.7/mean"  # higher is better; selects best.pt
 
 
 @dataclass(frozen=True)
@@ -295,6 +300,11 @@ def validate(cfg: DetectorConfig) -> DetectorConfig:
             need(0 <= op.momentum < 1, "optim.momentum", f"must be in [0, 1), got {op.momentum}")
         need(not (op.nesterov and op.momentum == 0), "optim.nesterov", "requires momentum > 0")
     need(tr.grad_clip >= 0, "train.grad_clip", f"must be >= 0, got {tr.grad_clip}")
+    need(0 < tr.warmup_frac < 1, "train.warmup_frac", f"must be in (0, 1), got {tr.warmup_frac}")
+    need(tr.log_every >= 1, "train.log_every", f"must be >= 1, got {tr.log_every}")
+    need(tr.val_max_frames >= 0, "train.val_max_frames", f"must be >= 0, got {tr.val_max_frames}")
+    need(tr.best_metric.startswith(("eval/", "val/")), "train.best_metric",
+         f"must be an eval/... or val/... metric name, got {tr.best_metric!r}")
     return cfg
 
 

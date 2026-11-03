@@ -73,7 +73,7 @@ save_config(cfg, "runs/my_run/config.yaml")
 | `returns` | [1, 2] | Top-LiDAR returns merged into the point cloud. |
 | `frame_interval_train`, `frame_interval_eval` | 5, 5 | Use every Nth frame. Consecutive 10 Hz frames are near-duplicates; interval 5 gives ~31.6k training frames. |
 | `shuffle_buffer` | 128 | Frames buffered per DataLoader worker, for shuffling across segments (~2.3 MB each, so 12 workers use ~3.5 GB). |
-| `num_workers` | 12 | DataLoader processes that decode range images. |
+| `num_workers` | 12 | DataLoader processes that decode range images. Each takes ~2.3 GiB of RAM (see [data.md](data.md#performance)). |
 | `min_points_train` | 1 | Training ignores boxes with fewer top-LiDAR points than this. |
 | *derived* `class_ids` | (1, 2, 4) | Dataset `BoxType` IDs, in channel order. |
 
@@ -164,4 +164,9 @@ is a one-line change: `--set model.backbone=resnet18`.
 | `precision` | bf16 | `bf16`, `fp16` or `fp32` autocast. |
 | `eval_every` | 2 | Validation evaluation interval, in epochs. |
 | `seed` | 0 | |
-| `runs_dir` | runs | Checkpoints, metrics and the resolved config go to `<runs_dir>/<name>/`. |
+| `runs_dir` | runs | Checkpoints, TensorBoard logs and the resolved config go to `<runs_dir>/<name>/`. |
+| `lr_schedule` | onecycle | `onecycle`: warm up from lr/10 to `optim.lr`, then cosine down to lr/10⁴ (CenterPoint). `cosine`: cosine decay from `optim.lr`. `constant`. See [training.md](training.md). |
+| `warmup_frac` | 0.4 | `onecycle`: fraction of all steps spent warming up. |
+| `log_every` | 50 | Steps between TensorBoard scalar writes. |
+| `val_max_frames` | 0 | Cap on validation frames per pass, for quick checks (0 = all). |
+| `best_metric` | eval/bev_ap@0.7/mean | Metric (higher is better) that selects `checkpoints/best.pt`. |

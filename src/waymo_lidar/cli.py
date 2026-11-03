@@ -1,4 +1,4 @@
-"""`wl index <root>` builds the analytics cache; `wl serve <root>` runs the web tool."""
+"""`wl index` / `wl serve`: analytics + viewer.  `wl train` / `wl eval`: the Phase 2 detector."""
 
 from __future__ import annotations
 
@@ -25,7 +25,36 @@ def main(argv: list[str] | None = None) -> None:
     ps.add_argument("--memory-limit", default="2GiB", help="Rerun gRPC server buffer (default 2GiB)")
     ps.add_argument("--no-index", action="store_true", help="skip indexing new segments on startup")
 
+    pt = sub.add_parser("train", help="train the detector (TensorBoard logs under runs/<name>/tb)")
+    pt.add_argument("root", type=Path)
+    pt.add_argument("--name", help="run name (default: a timestamp); runs/<name> must not exist unless --resume")
+    pt.add_argument("--config", type=Path, default=Path("configs/bev_centerpoint.yaml"))
+    pt.add_argument("--set", nargs="*", default=[], metavar="KEY=VALUE", help="config overrides")
+    pt.add_argument("--resume", action="store_true", help="continue runs/<name> from checkpoints/last.pt")
+    pt.add_argument("--overfit", metavar="SEGMENT", help="smoke test: train and validate on one training segment")
+    pt.add_argument("--max-minutes", type=float, help="stop cleanly after this long (validates and saves first)")
+
+    pe = sub.add_parser("eval", help="evaluate a checkpoint")
+    pe.add_argument("root", type=Path)
+    pe.add_argument("--ckpt", type=Path, required=True)
+    pe.add_argument("--split", default="validation")
+    pe.add_argument("--max-frames", type=int, default=0)
+
     a = p.parse_args(argv)
+    if a.cmd in ("train", "eval"):
+        root = a.root.expanduser().resolve()
+        if a.cmd == "train":
+            import time
+
+            from .det.config import load_config
+            from .det.train import train
+            train(root, load_config(a.config, a.set), a.name or time.strftime("%Y%m%d-%H%M%S"),
+                  resume=a.resume, overfit=a.overfit, max_minutes=a.max_minutes)
+        else:
+            from .det.train import evaluate_checkpoint
+            evaluate_checkpoint(root, a.ckpt, a.split, a.max_frames)
+        return
+
     from .analytics.index import build_index, default_cache_dir
 
     cache = a.cache or default_cache_dir(a.root)
