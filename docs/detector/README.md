@@ -31,7 +31,7 @@ Related docs: [dataset.md](../dataset.md) (the data) and
 | Targets | `det/targets.py` | [targets.md](targets.md) | **done** |
 | Model | `det/model.py` | [model.md](model.md) | **done** |
 | Loss | `det/loss.py` | [loss.md](loss.md) | **done** |
-| Decode | `det/decode.py` | | planned |
+| Decode | `det/decode.py` | [decode.md](decode.md) | **done** |
 | IoU | `det/iou.py` | | planned |
 | Evaluation | `det/eval.py` | | planned |
 | Training | `det/train.py` | | planned |

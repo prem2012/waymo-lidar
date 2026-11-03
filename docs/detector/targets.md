@@ -105,7 +105,7 @@ A **BEV targets** panel (one tab per class) opens next to the 3D view:
 | `bev/<class>/gt` | ground-truth box outlines, in cell coordinates |
 | `bev/<class>/centres` | decoded centres (`col + dx`, `row + dy`), as magenta dots |
 | `world/targets/<class>` | heatmap cells > 0.05 as thin tiles on the ground plane (z = −2 m) of the 3D view |
-| `world/targets/decoded` | boxes rebuilt from the targets with `reg_to_boxes`, as magenta wireframes. They sit exactly on the GT boxes; a GT box without one has its centre outside the grid. |
+| `world/targets/decoded` | boxes produced by the full [decode](decode.md) path from outputs that encode the targets (`perfect_outputs` → `decode`), as magenta wireframes. They sit exactly on the GT boxes; a GT box without one has its centre outside the grid. |
 
 - **BEV orientation:** the image's row 0 (top) is y = −75.2 m, the car's right. Drawn this way the car
   faces right with its **left side at the bottom**, mirrored relative to looking down in 3D.

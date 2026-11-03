@@ -25,7 +25,8 @@ from ..data.types import BOX_TYPE_COLORS
 from ..viz.colors import intensity_colors, turbo
 from .config import GridConfig, load_config
 from .data import collate, complete_segments, load_sample
-from .targets import TargetBuilder, reg_to_boxes
+from .decode import decode, perfect_outputs
+from .targets import TargetBuilder
 from .voxelize import Voxelizer, bev_cell_centers, voxel_centers
 
 
@@ -94,7 +95,8 @@ def log_targets(rec: rr.RecordingStream, sample: dict, targets: dict, cfg) -> No
                 colors=turbo(h[r_idx, c_idx]), fill_mode="solid"))
         else:
             rec.log(f"world/targets/{name}", rr.Clear(recursive=False))
-    decoded = reg_to_boxes(rows, cols, reg, cfg)
+    # Full decode path (peak picking, top-K, threshold, reg_to_boxes) on outputs that encode the targets.
+    decoded = decode(perfect_outputs(targets, cfg), cfg)[0].numpy()["boxes"].astype(np.float64)
     hd = decoded[:, 6]
     quats = np.stack([np.zeros_like(hd), np.zeros_like(hd), np.sin(hd / 2), np.cos(hd / 2)], 1)
     rec.log("world/targets/decoded", rr.Boxes3D(centers=decoded[:, :3], half_sizes=decoded[:, 3:6] / 2,
