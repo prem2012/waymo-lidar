@@ -30,7 +30,7 @@ Related docs: [dataset.md](../dataset.md) (the data) and
 | Voxelizer + voxel viewer | `det/voxelize.py`, `det/viz_voxels.py` | [voxelize.md](voxelize.md) | **done** |
 | Targets | `det/targets.py` | [targets.md](targets.md) | **done** |
 | Model | `det/model.py` | [model.md](model.md) | **done** |
-| Loss | `det/loss.py` | | planned |
+| Loss | `det/loss.py` | [loss.md](loss.md) | **done** |
 | Decode | `det/decode.py` | | planned |
 | IoU | `det/iou.py` | | planned |
 | Evaluation | `det/eval.py` | | planned |

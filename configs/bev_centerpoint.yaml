@@ -48,6 +48,7 @@ loss:
   focal_beta: 4.0
   reg_weight: 0.25
   code_weights: [1, 1, 1, 1, 1, 1, 1, 1]   # offset x, y | z | log l, w, h | sin, cos
+  reg_loss: l1              # l1 | smooth_l1 (for smooth_l1, optionally set smooth_l1_beta; default 1/9)
 
 decode:
   topk: 500

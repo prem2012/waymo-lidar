@@ -46,6 +46,7 @@ save_config(cfg, "runs/my_run/config.yaml")
   non-empty subset of 1–4.
 - **Value ranges:** probabilities and IoUs are within [0, 1], and counts are ≥ 1.
   `eval.distance_bins` starts at 0 and increases.
+- **Loss:** `loss.smooth_l1_beta` can only be set with `reg_loss: smooth_l1`, and must be > 0.
 - **Optimizer:** fields for one optimizer can't be set for another. For example, `momentum` with
   `adamw` is an error, not silently ignored. So to switch the YAML (which sets `betas`) to SGD, use
   `optim.name=sgd optim.betas=null`.
@@ -121,6 +122,8 @@ is a one-line change: `--set model.backbone=resnet18`.
 | `focal_alpha`, `focal_beta` | 2, 4 | Gaussian focal loss exponents. |
 | `reg_weight` | 0.25 | Weight of the regression loss relative to the heatmap loss. |
 | `code_weights` | [1] × 8 | Per-value regression weights: offset x, y · z · log l, w, h · sin, cos. |
+| `reg_loss` | l1 | Element loss for the regression: `l1` (CenterPoint) or `smooth_l1`. See [loss.md](loss.md). |
+| `smooth_l1_beta` | 1/9 when unset | Smooth L1's switch point between quadratic and linear. Only valid with `reg_loss: smooth_l1`. |
 
 **`decode`**: turning network outputs into boxes.
 

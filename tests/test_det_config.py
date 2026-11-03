@@ -98,10 +98,19 @@ def test_exponent_without_dot_is_a_float(tmp_path):
     (["optim.name=sgd"], "optim.betas"),                          # YAML sets betas, which sgd doesn't use
     (["optim.name=sgd", "optim.betas=null", "optim.momentum=0", "optim.nesterov=true"], "optim.nesterov"),
     (["optim.lr=0"], "optim.lr"),
+    (["loss.reg_loss=l2"], "loss.reg_loss"),
+    (["loss.smooth_l1_beta=0.1"], "loss.smooth_l1_beta"),                      # only with smooth_l1
+    (["loss.reg_loss=smooth_l1", "loss.smooth_l1_beta=0"], "loss.smooth_l1_beta"),
 ])
 def test_validation_errors_name_the_key(overrides, key):
     with pytest.raises(ConfigError, match=key.replace("[", r"\[")):
         load_config(YAML, overrides=overrides)
+
+
+def test_smooth_l1_options():
+    cfg = load_config(YAML, overrides=["loss.reg_loss=smooth_l1"])
+    assert cfg.loss.reg_loss == "smooth_l1" and cfg.loss.smooth_l1_beta is None
+    assert load_config(YAML, overrides=["loss.reg_loss=smooth_l1", "loss.smooth_l1_beta=0.05"]).loss.smooth_l1_beta == 0.05
 
 
 def test_bad_override_syntax():

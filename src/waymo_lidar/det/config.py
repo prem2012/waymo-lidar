@@ -141,6 +141,8 @@ class LossConfig:
     focal_beta: float = 4.0
     reg_weight: float = 0.25
     code_weights: tuple[float, ...] = (1.0,) * 8  # offset x, y · z · log l, w, h · sin, cos
+    reg_loss: Literal["l1", "smooth_l1"] = "l1"
+    smooth_l1_beta: float | None = None  # smooth_l1 only; None -> 1/9 (Faster R-CNN)
 
 
 @dataclass(frozen=True)
@@ -260,6 +262,10 @@ def validate(cfg: DetectorConfig) -> DetectorConfig:
 
     need(len(lo.code_weights) == 8, "loss.code_weights", f"need 8 weights (offset 2, z 1, size 3, rot 2), got {len(lo.code_weights)}")
     need(lo.reg_weight >= 0 and all(w >= 0 for w in lo.code_weights), "loss.code_weights", "weights must be >= 0")
+    if lo.reg_loss == "l1":
+        need(lo.smooth_l1_beta is None, "loss.smooth_l1_beta", "only applies to reg_loss: smooth_l1")
+    elif lo.smooth_l1_beta is not None:
+        need(lo.smooth_l1_beta > 0, "loss.smooth_l1_beta", f"must be > 0, got {lo.smooth_l1_beta}")
     need(len(dec.nms_iou) == len(d.classes), "decode.nms_iou",
          f"need one IoU per class ({len(d.classes)}), got {len(dec.nms_iou)}")
     need(all(0 < v <= 1 for v in dec.nms_iou), "decode.nms_iou", "values must be in (0, 1]")
