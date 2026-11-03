@@ -8,6 +8,83 @@ Related docs: [dataset.md](../dataset.md) (the data) and
 [analytics-viewer-architecture.md](../analytics-viewer-architecture.md) (Phase 1, including the shared
 `waymo_lidar.data` layer this detector reads from).
 
+## Quick start
+
+The examples assume the data is at `~/dev/data/waymo_v2` (with `training/` and `validation/` inside) and
+the default config `configs/bev_centerpoint.yaml`. Everything a run writes goes to `runs/<name>/`.
+
+### 1. Train
+
+```bash
+# Smoke test first (~3 min): overfit one training segment. Mean BEV AP@0.7 should climb past ~0.9.
+uv run wl train ~/dev/data/waymo_v2 --name smoke --overfit 10023947602400723454_1120_000_1140_000 \
+    --max-minutes 3 --set train.epochs=1000 train.eval_every=5 train.lr_schedule=constant
+
+# Full training (12 epochs, ~15 min per epoch on the RTX 4090 box, limited by data loading)
+uv run wl train ~/dev/data/waymo_v2 --name baseline
+
+# Continue an interrupted or --max-minutes run from checkpoints/last.pt
+uv run wl train ~/dev/data/waymo_v2 --name baseline --resume
+
+# Overrides use dotted keys, e.g. another backbone or a time cap
+uv run wl train ~/dev/data/waymo_v2 --name r18 --set model.backbone=resnet18 --max-minutes 60
+```
+
+- `--max-minutes` stops cleanly: it validates, saves `last.pt`, and exits. Continue later with `--resume`.
+- Each run gets `checkpoints/last.pt` (every epoch), `checkpoints/best.pt` (best `train.best_metric`,
+  default mean BEV AP@0.7), `eval_<epoch>.md` metric tables, the resolved `config.yaml`, and `tb/`.
+- **Memory:** each DataLoader worker uses ~2.3 GiB of RAM, so the default `data.num_workers: 12` needs
+  ~26–30 GiB. On a smaller machine lower it, e.g. `--set data.num_workers=6`.
+- Validation runs over the full validation split every `train.eval_every` epochs. For quicker checks,
+  `--set train.val_max_frames=400`.
+
+Details: [training.md](training.md).
+
+### 2. Monitor with TensorBoard
+
+```bash
+uv run tensorboard --logdir runs        # then open http://localhost:6006
+```
+
+Start it in a second terminal, before or during training. It picks up new runs and new data as they're
+written, and shows every run under `runs/` side by side. From another machine, use
+`ssh -L 6006:localhost:6006 <host>`, or add `--bind_all` to serve on the network.
+
+What to watch:
+
+| Tab / tag | Look for |
+|---|---|
+| Scalars `loss/total`, `loss/heatmap`, `loss/reg` | Falling. `train/skipped_steps` should stay 0. |
+| Scalars `eval/bev_ap@0.7/mean` (and per class) | Rising at each validation. |
+| Scalars `train/frames_per_s`, `train/data_wait_frac` | Throughput, and how much of it the GPU spends waiting for data (~25% at 12 workers today). |
+| Scalars `train/lr`, `train/grad_norm`, `train/gpu_mem_gib` | Schedule shape, stability, memory. |
+| Images `val/heatmap/<class>` | GT heatmap \| predicted heatmap, first validation frame. |
+| Text `eval/table`, `config` | Full metric table per validation; the run's resolved config. |
+
+### 3. Visualise predictions in Rerun
+
+```bash
+# Desktop viewer on one validation segment (all ~198 frames, ~20 s to compute)
+uv run wl predict ~/dev/data/waymo_v2 --ckpt runs/baseline/checkpoints/best.pt \
+    --segment 10203656353524179475_7625_000_7645_000
+
+# Also show heatmaps and scores; or write an .rrd to open later / elsewhere
+uv run wl predict ~/dev/data/waymo_v2 --ckpt runs/baseline/checkpoints/best.pt --segment <name> --heatmaps --labels
+uv run wl predict ~/dev/data/waymo_v2 --ckpt runs/baseline/checkpoints/best.pt --segment <name> --save pred.rrd
+uv run rerun pred.rrd
+
+# Browser viewer instead of a desktop window (e.g. on a remote box: forward port 9090)
+uv run wl predict ~/dev/data/waymo_v2 --ckpt runs/baseline/checkpoints/best.pt --segment <name> --web
+```
+
+Segment names are the file names (without `.parquet`) in `validation/lidar_box/`. With no `--segment`,
+the first complete validation segment is used. In the viewer, predictions are **green** (true positive),
+**red** (false positive) or grey (on an ignored box). Ground truth is in its **class colour** (found),
+**yellow** (missed) or dim grey (ignored). Colouring uses `--min-score` (0.3) and BEV `--iou` (0.5). For the
+numbers over a whole split instead: `uv run wl eval ~/dev/data/waymo_v2 --ckpt <ckpt>`.
+
+Details: [predict.md](predict.md).
+
 ## Design
 
 | Choice | Value | Why |
@@ -35,4 +112,4 @@ Related docs: [dataset.md](../dataset.md) (the data) and
 | IoU + NMS | `det/iou.py` | [iou.md](iou.md) | **done** |
 | Evaluation | `det/eval.py` | [eval.md](eval.md) | **done** |
 | Training | `det/train.py` | [training.md](training.md) | **done** |
-| Prediction + viewer | `det/predict.py`, `viz/stream.py` | | planned |
+| Prediction viewer | `det/predict.py` | [predict.md](predict.md) | **done** |

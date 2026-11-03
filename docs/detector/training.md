@@ -11,6 +11,7 @@ uv run wl train ~/dev/data/waymo_v2 --name baseline --resume              # cont
 uv run wl train ~/dev/data/waymo_v2 --name r18 --set model.backbone=resnet18 train.batch_size=8
 uv run wl train ~/dev/data/waymo_v2 --name smoke --overfit <segment> --max-minutes 5
 uv run wl eval  ~/dev/data/waymo_v2 --ckpt runs/baseline/checkpoints/best.pt
+uv run wl predict ~/dev/data/waymo_v2 --ckpt runs/baseline/checkpoints/best.pt --segment <name>   # Rerun: predict.md
 uv run tensorboard --logdir runs                                          # http://localhost:6006
 ```
 
