@@ -1,0 +1,302 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Waymo LiDAR Analytics</title>
+<link rel="stylesheet" href="/static/style.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/plotly.js/3.0.1/plotly.min.js"></script>
+</head>
+<body>
+<nav class="top">
+  <span class="brand">Waymo LiDAR</span>
+  <a class="page active" href="/analytics">Analytics</a>
+  <a class="page" href="/viewer">3D Viewer</a>
+  <span class="spacer"></span>
+  <span class="controls">Split <select id="split"><option value="all">All</option></select></span>
+</nav>
+<main>
+  <div class="sections">
+    <a href="#overview">Overview</a><a href="#labels">Labels</a><a href="#spatial">Spatial</a>
+    <a href="#pointcloud">Point cloud</a><a href="#scenes">Scenes</a>
+  </div>
+
+  <section id="overview">
+    <h2>Overview</h2>
+    <p class="lede" id="ov-lede"></p>
+    <div class="tiles" id="ov-tiles"></div>
+    <div class="grid" style="margin-top:14px">
+      <div class="card"><h3>Per split</h3><div class="scroll" id="ov-splits"></div></div>
+      <div class="card"><h3>Per class <span class="hint">L2 = labelled L2 or ≤ 5 points (Waymo eval rule)</span></h3><div class="scroll" id="ov-classes"></div></div>
+    </div>
+  </section>
+
+  <section id="labels">
+    <h2>Labels</h2>
+    <p class="lede">Class balance and box geometry. Box sizes set anchor / size priors; heading shows orientation bias.</p>
+    <div class="grid">
+      <div class="card"><h3>Boxes per class and split</h3><div class="chart" id="lb-split"></div></div>
+      <div class="card"><h3>Difficulty per class</h3><div class="chart" id="lb-level"></div></div>
+    </div>
+    <div class="card" style="margin-top:14px"><h3>Box size <span class="hint">metres, central 99%</span>
+      <select id="lb-dim"><option>length</option><option>width</option><option>height</option></select></h3>
+      <div class="grid" id="lb-size"></div>
+    </div>
+    <div class="card" style="margin-top:14px"><h3>Heading <span class="hint">vehicle frame, 0 = facing +x (forward)</span></h3>
+      <div class="grid" id="lb-heading"></div>
+    </div>
+  </section>
+
+  <section id="spatial">
+    <h2>Spatial</h2>
+    <p class="lede">Where objects are relative to the ego vehicle and how many points they get. Informs detection range and BEV grid extent.</p>
+    <div class="grid wide">
+      <div class="card"><h3>Distance from ego</h3><div class="chart" id="sp-range"></div></div>
+      <div class="card"><h3>Bird's-eye density <select id="sp-bev-class"></select></h3><div class="chart tall" id="sp-bev"></div></div>
+      <div class="card"><h3>Points per box vs distance <span class="hint">median, band = p10–p90, log scale</span></h3><div class="chart" id="sp-pts"></div></div>
+      <div class="card"><h3>Boxes with ≤ 5 points vs distance</h3><div class="chart" id="sp-empty"></div></div>
+    </div>
+  </section>
+
+  <section id="pointcloud">
+    <h2>Point cloud</h2>
+    <p class="lede" id="pc-lede"></p>
+    <div class="card"><h3>Per LiDAR and return <span class="hint">extents are vehicle-frame p1–p99, median over frames</span></h3><div class="scroll" id="pc-table"></div></div>
+    <div class="grid" style="margin-top:14px">
+      <div class="card"><h3>Points per frame</h3><div class="chart" id="pc-count"></div></div>
+      <div class="card"><h3>Intensity <span class="hint">log10, share of points</span> <select class="pc-ret" data-metric="intensity_log10"></select></h3><div class="chart" id="pc-intensity_log10"></div></div>
+      <div class="card"><h3>Elongation <span class="hint">share of points</span> <select class="pc-ret" data-metric="elongation"></select></h3><div class="chart" id="pc-elongation"></div></div>
+      <div class="card"><h3>Height z <span class="hint">metres, vehicle frame</span> <select class="pc-ret" data-metric="z"></select></h3><div class="chart" id="pc-z"></div></div>
+      <div class="card"><h3>Range <span class="hint">metres from sensor</span> <select class="pc-ret" data-metric="range"></select></h3><div class="chart" id="pc-range"></div></div>
+    </div>
+  </section>
+
+  <section id="scenes">
+    <h2>Scenes</h2>
+    <p class="lede">Dataset diversity and split balance.</p>
+    <div class="grid">
+      <div class="card"><h3>Time of day</h3><div class="chart" id="sc-time_of_day"></div></div>
+      <div class="card"><h3>Weather</h3><div class="chart" id="sc-weather"></div></div>
+      <div class="card"><h3>Location</h3><div class="chart" id="sc-location"></div></div>
+      <div class="card"><h3>Objects per frame</h3><div class="chart" id="sc-opf"></div></div>
+    </div>
+    <div class="card" style="margin-top:14px"><h3>Segments</h3><div class="scroll" id="sc-table"></div></div>
+  </section>
+</main>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+const fmt = (n, d = 0) => n == null || Number.isNaN(n) ? "–" : Number(n).toLocaleString(undefined, { maximumFractionDigits: d, minimumFractionDigits: d });
+const int = (v) => fmt(v);  // table formatters receive (value, row)
+const pct = (n, d = 1) => n == null ? "–" : (100 * n).toFixed(d) + "%";
+const SPLIT_COLORS = { training: "#2a78d6", validation: "#e3a33b" };
+const LASER_COLORS = { top: "#2a78d6", front: "#e3a33b", side_left: "#1ea05a", side_right: "#d64545", rear: "#8e5cc9" };
+const centers = (e) => e.slice(0, -1).map((v, i) => (v + e[i + 1]) / 2);
+const share = (c) => { const s = c.reduce((a, b) => a + b, 0) || 1; return c.map((v) => v / s); };
+
+function layout(extra = {}) {
+  return Object.assign({
+    margin: { l: 48, r: 12, t: 8, b: 36 },
+    paper_bgcolor: "rgba(0,0,0,0)", plot_bgcolor: "rgba(0,0,0,0)",
+    font: { color: css("--text"), size: 12, family: getComputedStyle(document.body).fontFamily },
+    xaxis: { gridcolor: css("--grid"), zerolinecolor: css("--grid") },
+    yaxis: { gridcolor: css("--grid"), zerolinecolor: css("--grid") },
+    legend: { orientation: "h", y: 1.12, x: 0 },
+    hoverlabel: { bgcolor: css("--panel"), bordercolor: css("--border"), font: { color: css("--text") } },
+    bargap: 0.08,
+  }, extra);
+}
+const axis = (o) => Object.assign({ gridcolor: css("--grid"), zerolinecolor: css("--grid") }, o);
+const plot = (id, data, extra) => Plotly.react($(id), data, layout(extra), { displayModeBar: false, responsive: true });
+
+function table(el, cols, rows) {
+  const th = cols.map((c) => `<th>${c.label}</th>`).join("");
+  const tr = rows.map((r) => "<tr>" + cols.map((c) => `<td>${c.fmt ? c.fmt(r[c.key], r) : r[c.key] ?? "–"}</td>`).join("") + "</tr>").join("");
+  $(el).innerHTML = `<table><thead><tr>${th}</tr></thead><tbody>${tr}</tbody></table>`;
+}
+const swatch = (color, text) => `<span class="swatch" style="background:${color}"></span>${text}`;
+
+async function get(section, split) {
+  const r = await fetch(`/api/stats/${section}?split=${encodeURIComponent(split)}`);
+  if (!r.ok) throw new Error((await r.json()).detail || r.statusText);
+  return r.json();
+}
+
+// ---------------------------------------------------------------------------------------------
+function renderOverview(d) {
+  const t = d.totals;
+  $("ov-lede").innerHTML = `Data <code>${d.root}</code>. Point statistics use every ${d.stride}th frame.`;
+  $("ov-tiles").innerHTML = [["Segments", t.segments], ["Frames", t.frames], ["Boxes", t.boxes], ["Tracked objects", t.objects], ["Minutes of driving", t.minutes, 1]]
+    .map(([k, v, dp]) => `<div class="tile"><div class="v">${fmt(v, dp || 0)}</div><div class="k">${k}</div></div>`).join("");
+  table("ov-splits", [
+    { key: "split", label: "Split", fmt: (v) => swatch(SPLIT_COLORS[v] || "#999", v) },
+    { key: "segments", label: "Segments", fmt: int }, { key: "frames", label: "Frames", fmt: int },
+    { key: "boxes", label: "Boxes", fmt: int }, { key: "objects", label: "Objects", fmt: int },
+    { key: "minutes", label: "Minutes", fmt: (v) => fmt(v, 1) },
+  ], d.per_split);
+  const colors = { vehicle: "#2a78d6", pedestrian: "#eb7828", cyclist: "#1ea05a", sign: "#965ac8" };
+  table("ov-classes", [
+    { key: "type", label: "Class", fmt: (v) => swatch(colors[v], v) },
+    { key: "boxes", label: "Boxes", fmt: int }, { key: "objects", label: "Objects", fmt: int },
+    { key: "L1", label: "L1", fmt: int }, { key: "L2", label: "L2", fmt: int },
+    { key: "empty", label: "0 points", fmt: (v, r) => `${fmt(v)} <span class="muted">(${pct(v / r.boxes)})</span>` },
+  ], d.class_counts);
+}
+
+function renderLabels(d) {
+  const splits = [...new Set(d.by_split.map((r) => r.split))];
+  plot("lb-split", splits.map((s) => ({
+    type: "bar", name: s, marker: { color: SPLIT_COLORS[s] },
+    x: d.classes, y: d.classes.map((c) => (d.by_split.find((r) => r.split === s && r.type === c) || {}).boxes || 0),
+  })), { barmode: "group" });
+  const cc = Object.fromEntries(d.class_counts.map((r) => [r.type, r]));
+  plot("lb-level", [["L1", "#2a78d6"], ["L2", "#9fb8d8"]].map(([lvl, col]) => ({
+    type: "bar", name: lvl, marker: { color: col }, x: d.classes, y: d.classes.map((c) => cc[c][lvl]),
+  })), { barmode: "stack" });
+
+  const dim = $("lb-dim").value;
+  $("lb-size").innerHTML = d.classes.map((c) => `<div><div class="muted" style="font-size:12px">${swatch(d.colors[c], c)} median ${d.size[c].summary[dim].p50.toFixed(2)} m (p10 ${d.size[c].summary[dim].p10.toFixed(2)} – p90 ${d.size[c].summary[dim].p90.toFixed(2)})</div><div class="chart" style="height:200px" id="lb-size-${c}"></div></div>`).join("");
+  for (const c of d.classes) {
+    const h = d.size[c][dim];
+    plot(`lb-size-${c}`, [{ type: "bar", x: centers(h.edges), y: h.counts, marker: { color: d.colors[c] }, hovertemplate: "%{x:.2f} m: %{y}<extra></extra>" }],
+      { xaxis: axis({ title: { text: `${dim} (m)` } }), showlegend: false, margin: { l: 44, r: 8, t: 6, b: 38 } });
+  }
+  $("lb-heading").innerHTML = d.classes.map((c) => `<div><div class="muted" style="font-size:12px">${swatch(d.colors[c], c)}</div><div class="chart" style="height:240px" id="lb-heading-${c}"></div></div>`).join("");
+  for (const c of d.classes) {
+    const h = d.heading[c];
+    Plotly.react($(`lb-heading-${c}`), [{
+      type: "barpolar", r: h.counts, theta: centers(h.edges).map((v) => v * 180 / Math.PI), marker: { color: d.colors[c] },
+      hovertemplate: "%{theta:.0f}°: %{r}<extra></extra>",
+    }], layout({ margin: { l: 20, r: 20, t: 16, b: 16 }, showlegend: false,
+      polar: { bgcolor: "rgba(0,0,0,0)", angularaxis: { rotation: 90, direction: "counterclockwise", gridcolor: css("--grid"), color: css("--muted") },
+               radialaxis: { gridcolor: css("--grid"), color: css("--muted"), showticklabels: false } } }),
+      { displayModeBar: false, responsive: true });
+  }
+}
+
+let spatialData = null;
+function renderSpatial(d) {
+  spatialData = d;
+  plot("sp-range", d.classes.map((c) => ({
+    type: "scatter", mode: "lines", name: c, line: { color: d.colors[c], width: 2, shape: "hvh" },
+    x: centers(d.range[c].edges), y: d.range[c].counts,
+  })), { xaxis: axis({ title: { text: "distance (m)" } }), yaxis: axis({ title: { text: "boxes" } }) });
+
+  const sel = $("sp-bev-class"), prev = sel.value;
+  sel.innerHTML = d.classes.map((c) => `<option>${c}</option>`).join("");
+  if (d.classes.includes(prev)) sel.value = prev;
+  renderBev();
+
+  const traces = [];
+  for (const c of d.classes) {
+    const rows = d.points_vs_range[c];
+    const x = rows.map((r) => r.range);
+    traces.push({ x: x.concat([...x].reverse()), y: rows.map((r) => Math.max(r.p90, 1)).concat(rows.map((r) => Math.max(r.p10, 1)).reverse()),
+      type: "scatter", fill: "toself", fillcolor: d.colors[c] + "22", line: { width: 0 }, hoverinfo: "skip", showlegend: false });
+    traces.push({ x, y: rows.map((r) => Math.max(r.p50, 1)), type: "scatter", mode: "lines+markers", name: c,
+      line: { color: d.colors[c], width: 2 }, marker: { size: 5 }, customdata: rows.map((r) => [r.n, r.p10, r.p90]),
+      hovertemplate: `${c} @ %{x} m<br>median %{y:.0f} pts (p10 %{customdata[1]:.0f}, p90 %{customdata[2]:.0f})<br>%{customdata[0]} boxes<extra></extra>` });
+  }
+  plot("sp-pts", traces, { xaxis: axis({ title: { text: "distance (m)" } }), yaxis: axis({ type: "log", title: { text: "points in box" } }) });
+  plot("sp-empty", d.classes.map((c) => ({
+    type: "scatter", mode: "lines+markers", name: c, line: { color: d.colors[c], width: 2 }, marker: { size: 5 },
+    x: d.points_vs_range[c].map((r) => r.range), y: d.points_vs_range[c].map((r) => r.le5_frac),
+    hovertemplate: `${c} @ %{x} m: %{y:.1%}<extra></extra>`,
+  })), { xaxis: axis({ title: { text: "distance (m)" } }), yaxis: axis({ tickformat: ".0%", title: { text: "share of boxes" }, rangemode: "tozero" }) });
+}
+function renderBev() {
+  const d = spatialData, c = $("sp-bev-class").value;
+  if (!d || !c) return;
+  const b = d.bev[c], cs = centers(b.edges);
+  plot("sp-bev", [{
+    type: "heatmap", x: cs, y: cs, z: b.counts.map((row) => row.map((v) => v > 0 ? Math.log10(v) : null)),
+    colorscale: "Viridis", colorbar: { title: { text: "log10 boxes" }, thickness: 10 },
+    customdata: b.counts, hovertemplate: "x %{x} m, y %{y} m: %{customdata} boxes<extra></extra>",
+  }, { type: "scatter", mode: "markers", x: [0], y: [0], marker: { symbol: "triangle-right", size: 12, color: "#d64545" }, name: "ego", hoverinfo: "name" }],
+  { xaxis: axis({ title: { text: "x forward (m)" }, scaleanchor: "y" }), yaxis: axis({ title: { text: "y left (m)" } }), showlegend: false, margin: { l: 52, r: 8, t: 8, b: 40 } });
+}
+
+let pcData = null;
+function renderPointcloud(d) {
+  pcData = d;
+  $("pc-lede").textContent = `Raw sensor statistics from every ${d.stride}th frame. Informs voxel size, input features and normalisation.`;
+  table("pc-table", [
+    { key: "laser", label: "LiDAR", fmt: (v) => swatch(LASER_COLORS[v], v) }, { key: "return", label: "Return" },
+    { key: "mean_points", label: "Points / frame", fmt: int }, { key: "nlz_frac", label: "In NLZ", fmt: (v) => pct(v, 2) },
+    { key: "x_p01", label: "x range", fmt: (v, r) => `${fmt(r.x_p01, 1)} … ${fmt(r.x_p99, 1)}` },
+    { key: "y_p01", label: "y range", fmt: (v, r) => `${fmt(r.y_p01, 1)} … ${fmt(r.y_p99, 1)}` },
+    { key: "z_p01", label: "z range", fmt: (v, r) => `${fmt(r.z_p01, 2)} … ${fmt(r.z_p99, 2)}` },
+    { key: "range_max", label: "Max range", fmt: (v) => fmt(v, 1) + " m" },
+  ], d.per_laser);
+  plot("pc-count", [1, 2].map((ret) => ({
+    type: "bar", name: `return ${ret}`, x: d.lasers, marker: { color: ret === 1 ? "#2a78d6" : "#9fb8d8" },
+    y: d.lasers.map((l) => (d.per_laser.find((r) => r.laser === l && r.return === ret) || {}).mean_points || 0),
+  })), { barmode: "stack", yaxis: axis({ type: "log", title: { text: "points per frame (log)" } }) });
+  for (const sel of document.querySelectorAll(".pc-ret")) {
+    if (!sel.options.length) sel.innerHTML = `<option value="1">return 1</option><option value="2">return 2</option>`;
+    renderPcHist(sel.dataset.metric, sel.value);
+  }
+}
+function renderPcHist(metric, ret) {
+  const d = pcData, edges = d.bins[metric], x = centers(edges);
+  const units = { intensity_log10: "log10 intensity", elongation: "elongation", z: "z (m)", range: "range (m)" };
+  plot(`pc-${metric}`, d.lasers.filter((l) => d.hist[metric][l] && d.hist[metric][l][ret]).map((l) => ({
+    type: "scatter", mode: "lines", name: l, line: { color: LASER_COLORS[l], width: 2, shape: "hvh" },
+    x, y: share(d.hist[metric][l][ret]), hovertemplate: `${l} %{x:.2f}: %{y:.2%}<extra></extra>`,
+  })), { xaxis: axis({ title: { text: units[metric] } }), yaxis: axis({ tickformat: ".0%" }) });
+}
+
+function renderScenes(d) {
+  for (const field of ["time_of_day", "weather", "location"]) {
+    const rows = d.categories[field], cats = [...new Set(rows.map((r) => r[field]))], splits = [...new Set(rows.map((r) => r.split))];
+    plot(`sc-${field}`, splits.map((s) => ({
+      type: "bar", name: s, marker: { color: SPLIT_COLORS[s] }, x: cats,
+      y: cats.map((c) => (rows.find((r) => r.split === s && r[field] === c) || {}).segments || 0),
+    })), { barmode: "group", yaxis: axis({ title: { text: "segments" }, dtick: 1 }) });
+  }
+  plot("sc-opf", d.classes.map((c) => ({
+    type: "scatter", mode: "lines", name: `${c} (mean ${d.objects_per_frame[c].mean.toFixed(1)})`,
+    line: { color: d.colors[c], width: 2, shape: "hvh" },
+    x: d.objects_per_frame[c].edges.slice(0, -1), y: share(d.objects_per_frame[c].counts),
+    hovertemplate: `${c}: %{x} per frame in %{y:.1%} of frames<extra></extra>`,
+  })), { xaxis: axis({ title: { text: "objects in frame" } }), yaxis: axis({ tickformat: ".0%", title: { text: "share of frames" } }) });
+  table("sc-table", [
+    { key: "segment", label: "Segment", fmt: (v, r) => `<a href="/viewer?split=${r.split}&segment=${v}">${v}</a>` },
+    { key: "split", label: "Split" }, { key: "num_frames", label: "Frames", fmt: int }, { key: "num_boxes", label: "Boxes", fmt: int },
+    { key: "num_objects", label: "Objects", fmt: int }, { key: "time_of_day", label: "Time" }, { key: "weather", label: "Weather" }, { key: "location", label: "Location" },
+  ], d.segments);
+}
+
+// ---------------------------------------------------------------------------------------------
+const renderers = { overview: renderOverview, labels: renderLabels, spatial: renderSpatial, pointcloud: renderPointcloud, scenes: renderScenes };
+let cache = {};
+
+async function load() {
+  const split = $("split").value;
+  await Promise.all(Object.entries(renderers).map(async ([section, render]) => {
+    try {
+      const key = `${section}:${split}`;
+      cache[key] = cache[key] || await get(section, split);
+      render(cache[key]);
+    } catch (e) {
+      $(section).insertAdjacentHTML("beforeend", `<div class="error">Failed to load ${section}: ${e.message}</div>`);
+    }
+  }));
+}
+
+(async () => {
+  try {
+    const splits = await (await fetch("/api/splits")).json();
+    $("split").insertAdjacentHTML("beforeend", splits.map((s) => `<option value="${s}">${s}</option>`).join(""));
+  } catch (e) { /* index missing: sections report the error */ }
+  $("split").addEventListener("change", load);
+  $("lb-dim").addEventListener("change", () => renderLabels(cache[`labels:${$("split").value}`]));
+  $("sp-bev-class").addEventListener("change", renderBev);
+  document.querySelectorAll(".pc-ret").forEach((s) => s.addEventListener("change", () => renderPcHist(s.dataset.metric, s.value)));
+  matchMedia("(prefers-color-scheme: dark)").addEventListener("change", load);  // re-theme charts
+  load();
+})();
+</script>
+</body>
+</html>

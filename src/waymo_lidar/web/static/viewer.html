@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Waymo LiDAR Viewer</title>
+<link rel="stylesheet" href="/static/style.css">
+<style>
+  html, body { height: 100%; }
+  body { display: flex; flex-direction: column; }
+  .bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 8px 20px; background: var(--panel); border-bottom: 1px solid var(--border); }
+  .bar select#segment { min-width: 320px; max-width: 100%; }
+  .bar label { display: flex; gap: 6px; align-items: center; color: var(--muted); }
+  #status { color: var(--muted); font-variant-numeric: tabular-nums; }
+  .frame { flex: 1; position: relative; min-height: 0; }
+  iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; background: #0d1117; }
+  .empty { position: absolute; inset: 0; display: grid; place-items: center; color: var(--muted); text-align: center; padding: 20px; }
+</style>
+</head>
+<body>
+<nav class="top">
+  <span class="brand">Waymo LiDAR</span>
+  <a class="page" href="/analytics">Analytics</a>
+  <a class="page active" href="/viewer">3D Viewer</a>
+</nav>
+<div class="bar">
+  <select id="segment" aria-label="Segment"></select>
+  <label><input type="checkbox" id="return2"> include return 2</label>
+  <button class="primary" id="open">Open</button>
+  <span id="status"></span>
+</div>
+<div class="frame">
+  <div class="empty" id="empty">Pick a segment and press <b>&nbsp;Open</b>. Frames stream straight from the Parquet files.<br>
+    In the viewer: toggle LiDARs / returns / box classes in the left panel, switch between the <i>Ego frame</i> and <i>World frame</i> tabs, scrub with the timeline.</div>
+  <iframe id="viewer" title="Rerun viewer" hidden></iframe>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+let poll = null;
+
+async function loadSegments() {
+  const segs = await (await fetch("/api/segments")).json();
+  const bySplit = {};
+  for (const s of segs) (bySplit[s.split] = bySplit[s.split] || []).push(s);
+  $("segment").innerHTML = Object.entries(bySplit).map(([split, list]) =>
+    `<optgroup label="${split}">` + list.map((s) => {
+      const meta = [s.num_frames && `${s.num_frames} frames`, s.time_of_day, s.weather, s.location].filter(Boolean).join(" · ");
+      return `<option value="${split}|${s.segment}">${s.segment}${meta ? "  —  " + meta : ""}</option>`;
+    }).join("") + "</optgroup>").join("");
+  const q = new URLSearchParams(location.search);
+  if (q.get("split") && q.get("segment")) {
+    $("segment").value = `${q.get("split")}|${q.get("segment")}`;
+    if (q.get("returns") === "1,2") $("return2").checked = true;
+    open();
+  } else {
+    resume();
+  }
+}
+
+// Coming back from Analytics: reattach to the segment already held by the server instead of re-streaming it.
+async function resume() {
+  const st = await (await fetch("/api/view/status")).json();
+  if (!st.viewer_url || !["streaming", "done"].includes(st.state)) return;
+  $("segment").value = `${st.split}|${st.segment}`;
+  $("return2").checked = st.returns.includes(2);
+  history.replaceState(null, "", `/viewer?split=${st.split}&segment=${st.segment}${st.returns.includes(2) ? "&returns=1,2" : ""}`);
+  show(st.viewer_url);
+}
+
+function show(viewerUrl) {
+  $("empty").hidden = true;
+  $("viewer").hidden = false;
+  $("viewer").src = viewerUrl;
+  clearInterval(poll);
+  poll = setInterval(status, 500);
+  status();
+}
+
+async function open() {
+  const [split, segment] = $("segment").value.split("|");
+  const returns = $("return2").checked ? "1,2" : "1";
+  $("open").disabled = true;
+  $("status").textContent = "starting…";
+  try {
+    const r = await fetch(`/api/view?split=${encodeURIComponent(split)}&segment=${encodeURIComponent(segment)}&returns=${returns}`, { method: "POST" });
+    const st = await r.json();
+    if (!r.ok) throw new Error(st.detail || r.statusText);
+    history.replaceState(null, "", `/viewer?split=${split}&segment=${segment}${returns === "1,2" ? "&returns=1,2" : ""}`);
+    show(st.viewer_url);  // fresh viewer per segment, so the previous one is freed
+  } catch (e) {
+    $("status").textContent = "error: " + e.message;
+  } finally {
+    $("open").disabled = false;
+  }
+}
+
+async function status() {
+  const st = await (await fetch("/api/view/status")).json();
+  const first = st.first_frame_s != null ? ` · first frame ${st.first_frame_s.toFixed(2)} s` : "";
+  const label = { streaming: "streaming", done: "done", cancelled: "cancelled", error: "error", idle: "" }[st.state];
+  $("status").textContent = `${label} ${st.frames_sent}/${st.frames_total} frames · ${st.elapsed_s.toFixed(1)} s${first}` + (st.error ? ` · ${st.error}` : "");
+  if (st.state !== "streaming") clearInterval(poll);
+}
+
+$("open").addEventListener("click", open);
+loadSegments();
+</script>
+</body>
+</html>
