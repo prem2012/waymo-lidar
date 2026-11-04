@@ -4,3 +4,8 @@ __pycache__/
 .pytest_cache/
 *.rrd
 runs/
+*.pt
+*.onnx
+*.onnx.data
+*.plan
+*.engine

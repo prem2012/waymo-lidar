@@ -2,6 +2,8 @@
 name = "waymo-lidar"
 version = "0.1.0"
 description = "LiDAR 3D detection on Waymo Open Dataset v2: data tooling, analytics and visualization"
+license = "MIT"
+license-files = ["LICENSE"]
 requires-python = ">=3.11,<3.13"
 dependencies = [
     "numpy>=2.0",
