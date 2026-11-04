@@ -1,4 +1,4 @@
-"""`wl index` / `wl serve`: analytics + viewer.  `wl train` / `wl eval` / `wl predict`: the Phase 2 detector."""
+"""`wl index` / `wl serve`: analytics + viewer.  `wl train` / `wl eval` / `wl predict` / `wl export`: the Phase 2 detector."""
 
 from __future__ import annotations
 
@@ -41,13 +41,18 @@ def main(argv: list[str] | None = None) -> None:
     pe.add_argument("--split", default="validation")
     pe.add_argument("--max-frames", type=int, default=0)
 
-    # `wl predict`'s options live in det/predict.py and are parsed there (so other commands don't import
+    # `wl predict` / `wl export` options live in their modules and are parsed there (so other commands don't import
     # torch / rerun just to build the parser); it's listed here only for `wl -h`.
     sub.add_parser("predict", add_help=False, help="view a checkpoint's predictions vs GT in Rerun (wl predict -h)")
+    sub.add_parser("export", add_help=False, help="export the network to ONNX / TensorRT (wl export -h)")
     args = sys.argv[1:] if argv is None else argv
     if args[:1] == ["predict"]:
         from .det.predict import main as predict_main
         predict_main(args[1:])
+        return
+    if args[:1] == ["export"]:
+        from .det.export import main as export_main
+        export_main(args[1:])
         return
 
     a = p.parse_args(argv)

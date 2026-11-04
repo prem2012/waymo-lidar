@@ -85,6 +85,17 @@ numbers over a whole split instead: `uv run wl eval ~/dev/data/waymo_v2 --ckpt <
 
 Details: [predict.md](predict.md).
 
+### 4. Export for deployment (ONNX / TensorRT)
+
+```bash
+uv run wl export runs/baseline/checkpoints/best.pt                                   # fp16 ONNX + .json metadata
+uv run --with tensorrt-cu13 wl export runs/baseline/checkpoints/best.pt --engine     # + TensorRT engine, checked
+```
+
+This exports the network only; voxelize and decode stay in Python. On the RTX 4090 the fp16 TensorRT
+engine takes 2.5 ms per frame, against 4.7 ms for PyTorch bf16. To build it on a Jetson Orin, copy the
+`.onnx` and `.onnx.data` there and use `trtexec --stronglyTyped`. Details: [export.md](export.md).
+
 ## Design
 
 | Choice | Value | Why |
@@ -113,3 +124,4 @@ Details: [predict.md](predict.md).
 | Evaluation | `det/eval.py` | [eval.md](eval.md) | **done** |
 | Training | `det/train.py` | [training.md](training.md) | **done** |
 | Prediction viewer | `det/predict.py` | [predict.md](predict.md) | **done** |
+| Export (ONNX / TensorRT) | `det/export.py` | [export.md](export.md) | **done** |
