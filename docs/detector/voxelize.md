@@ -1,6 +1,6 @@
 # Detector voxelizer
 
-Part of the [Phase 2 detector](README.md). Code: `src/waymo_lidar/det/voxelize.py` (voxelizer) and
+Part of the [detector](README.md). Code: `src/waymo_lidar/det/voxelize.py` (voxelizer) and
 `src/waymo_lidar/det/viz_voxels.py` (viewer); tests: `tests/test_det_voxelize.py`; settings: the
 `grid` section of the [config](config.md).
 

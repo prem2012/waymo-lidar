@@ -1,6 +1,6 @@
 # Detector loss
 
-Part of the [Phase 2 detector](README.md). Code: `src/waymo_lidar/det/loss.py`; tests:
+Part of the [detector](README.md). Code: `src/waymo_lidar/det/loss.py`; tests:
 `tests/test_det_loss.py`; settings: the `loss` section of the [config](config.md).
 
 CenterPoint's loss: a **Gaussian focal loss** on the class heatmaps, plus a masked **L1 or smooth L1**

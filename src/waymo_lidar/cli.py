@@ -1,4 +1,4 @@
-"""`wl index` / `wl serve`: analytics + viewer.  `wl train` / `wl eval` / `wl predict` / `wl export`: the Phase 2 detector."""
+"""`wl index` / `wl serve`: analytics + viewer.  `wl train` / `wl eval` / `wl predict` / `wl export`: the detector."""
 
 from __future__ import annotations
 

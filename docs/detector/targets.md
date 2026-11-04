@@ -1,6 +1,6 @@
 # Detector training targets
 
-Part of the [Phase 2 detector](README.md). Code: `src/waymo_lidar/det/targets.py`; tests:
+Part of the [detector](README.md). Code: `src/waymo_lidar/det/targets.py`; tests:
 `tests/test_det_targets.py`; settings: the `target` section of the [config](config.md).
 
 The model's CenterPoint head predicts, on a 376 × 376 grid of 0.4 m cells:

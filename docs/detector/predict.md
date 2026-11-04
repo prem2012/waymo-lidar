@@ -1,6 +1,6 @@
 # Prediction viewer
 
-Part of the [Phase 2 detector](README.md). Code: `src/waymo_lidar/det/predict.py`; tests:
+Part of the [detector](README.md). Code: `src/waymo_lidar/det/predict.py`; tests:
 `tests/test_det_predict.py`.
 
 Runs a checkpoint over one segment and shows its predictions next to the ground truth in Rerun, colour-coded

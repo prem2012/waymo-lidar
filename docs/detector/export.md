@@ -1,6 +1,6 @@
 # Export: ONNX and TensorRT
 
-Part of the [Phase 2 detector](README.md). Code: `src/waymo_lidar/det/export.py`; tests:
+Part of the [detector](README.md). Code: `src/waymo_lidar/det/export.py`; tests:
 `tests/test_det_export.py`.
 
 ## Usage

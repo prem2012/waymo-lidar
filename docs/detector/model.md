@@ -1,6 +1,6 @@
 # Detector model
 
-Part of the [Phase 2 detector](README.md). Code: `src/waymo_lidar/det/model.py`; tests:
+Part of the [detector](README.md). Code: `src/waymo_lidar/det/model.py`; tests:
 `tests/test_det_model.py`; settings: the `model` section of the [config](config.md).
 
 The model maps the [voxelizer's](voxelize.md) BEV occupancy image to CenterPoint outputs at the

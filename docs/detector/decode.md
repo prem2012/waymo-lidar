@@ -1,6 +1,6 @@
 # Detector decode
 
-Part of the [Phase 2 detector](README.md). Code: `src/waymo_lidar/det/decode.py`; tests:
+Part of the [detector](README.md). Code: `src/waymo_lidar/det/decode.py`; tests:
 `tests/test_det_decode.py`; settings: the `decode` section of the [config](config.md).
 
 Decode turns the [model's](model.md) output maps into a list of 3D boxes per frame, each with a score

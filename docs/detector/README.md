@@ -1,12 +1,12 @@
-# Detector (Phase 2)
+# Detector
 
 A single-frame LiDAR 3D detector: top-LiDAR points → binary occupancy voxels → a 2D CNN over the
-bird's-eye view (BEV) → a CenterPoint head. It is built one component at a time, and each component
-gets its own doc in this folder when it's built.
+bird's-eye view (BEV) → a CenterPoint head. Each component has its own doc in this folder (see
+[Components](#components)).
 
 Related docs: [dataset.md](../dataset.md) (the data) and
-[analytics-viewer-architecture.md](../analytics-viewer-architecture.md) (Phase 1, including the shared
-`waymo_lidar.data` layer this detector reads from).
+[analytics-viewer-architecture.md](../analytics-viewer-architecture.md) (the analytics page and viewer,
+including the shared `waymo_lidar.data` layer this detector reads from).
 
 ## Quick start
 

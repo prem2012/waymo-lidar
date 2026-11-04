@@ -1,6 +1,6 @@
 # Rotated IoU and NMS
 
-Part of the [Phase 2 detector](README.md). Code: `src/waymo_lidar/det/iou.py`; tests:
+Part of the [detector](README.md). Code: `src/waymo_lidar/det/iou.py`; tests:
 `tests/test_det_iou.py`.
 
 Exact **BEV IoU** and **3D IoU** between upright boxes, plus greedy **rotated NMS**, all vectorised

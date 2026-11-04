@@ -1,6 +1,6 @@
 # Detector config
 
-Part of the [Phase 2 detector](README.md). Code: `src/waymo_lidar/det/config.py`; default file: `configs/bev_centerpoint.yaml`; tests: `tests/test_det_config.py`.
+Part of the [detector](README.md). Code: `src/waymo_lidar/det/config.py`; default file: `configs/bev_centerpoint.yaml`; tests: `tests/test_det_config.py`.
 
 Every number the detector uses lives in one typed, validated config. It is defined once, checked
 before anything runs, and saved with each training run.
@@ -25,7 +25,7 @@ save_config(cfg, "runs/my_run/config.yaml")
   as YAML: `true`, `8`, `1e-4`, `[0.5, 0.7]`, `null`.
 - **Saved runs:** `save_config` writes plain YAML, and `load_config` on that file reproduces the exact
   config.
-- **Not in the config:** the data root. It stays a command-line argument, as in Phase 1.
+- **Not in the config:** the data root. It stays a command-line argument, as for `wl index` and `wl serve`.
 
 ## Validation
 

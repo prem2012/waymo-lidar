@@ -1,4 +1,4 @@
-# BEV occupancy detector with a CenterPoint head (Phase 2).
+# BEV occupancy detector with a CenterPoint head.
 # Every field is optional: anything left out takes the default from waymo_lidar/det/config.py.
 # Override on the command line with dotted keys, e.g. --set train.batch_size=8 grid.extra_channels=true
 # Field reference: docs/detector/config.md

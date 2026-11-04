@@ -1,8 +1,8 @@
 # Analytics & viewer architecture
 
 How the Waymo Parquet files flow into the analytics page and the 3D viewer: modules, data contracts,
-runtime behaviour, performance and how to extend it. This covers Phase 1 only. The `waymo_lidar.data`
-layer described here is shared, and later phases (training, evaluation) will get their own docs.
+runtime behaviour, performance and how to extend it. The `waymo_lidar.data` layer
+described here is shared with the detector, which is documented in [detector/](detector/README.md).
 For the dataset itself see [dataset.md](dataset.md).
 
 ---
@@ -99,7 +99,7 @@ waymo_lidar/
   docs/                       dataset.md, analytics-viewer-architecture.md
   src/waymo_lidar/
     cli.py                    `wl index`, `wl serve`
-    data/                     ── reusable by later phases (training, eval) ──
+    data/                     ── shared with the detector (det/) ──
       types.py                enums: Laser, BoxType, colours, range image channel indices
       dataset.py              WaymoDataset, Segment, LaserCalibration, FrameRangeImages, list_column()
       range_image.py          PointCloud, range_image_to_points(), frame_to_points()
@@ -116,7 +116,7 @@ waymo_lidar/
 ```
 
 **Dependency direction:** `data` ← `analytics`, `viz` ← `web` ← `cli`. `data` imports nothing from the
-rest of the package, which is what lets later phases reuse it.
+rest of the package, which is what lets the detector reuse it.
 
 ---
 
@@ -397,7 +397,7 @@ and `table(el, cols, rows)` helpers.
 inherit the ego transform. Put new static data, such as more annotation classes, in the static block
 at the top.
 
-**Training (Phase 2+):** reuse `waymo_lidar.data` directly. `iter_range_images` + `frame_to_points` +
+**Training:** reuse `waymo_lidar.data` directly, as the [detector](detector/README.md) does. `iter_range_images` + `frame_to_points` +
 `Boxes` give per-frame points and boxes in the vehicle frame. The cache's `boxes` table is a cheap way
 to sample frames or classes without decoding anything.
 

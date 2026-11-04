@@ -1,6 +1,6 @@
 # Detector training
 
-Part of the [Phase 2 detector](README.md). Code: `src/waymo_lidar/det/train.py`; tests:
+Part of the [detector](README.md). Code: `src/waymo_lidar/det/train.py`; tests:
 `tests/test_det_train.py`; settings: the `train` and `optim` sections of the [config](config.md).
 
 ## Usage

@@ -1,6 +1,6 @@
 # Detector data stream
 
-Part of the [Phase 2 detector](README.md). Code: `src/waymo_lidar/det/data.py`; tests:
+Part of the [detector](README.md). Code: `src/waymo_lidar/det/data.py`; tests:
 `tests/test_det_data.py`; settings: the `data` and `augment` sections of the [config](config.md).
 
 The stream turns segments on disk into training and evaluation samples: top-LiDAR points plus

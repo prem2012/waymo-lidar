@@ -1,6 +1,6 @@
 # Detector evaluation
 
-Part of the [Phase 2 detector](README.md). Code: `src/waymo_lidar/det/eval.py`; tests:
+Part of the [detector](README.md). Code: `src/waymo_lidar/det/eval.py`; tests:
 `tests/test_det_eval.py`; settings: the `eval` section of the [config](config.md).
 
 Average precision (AP) per class (vehicle, pedestrian, cyclist), in three metric families:
