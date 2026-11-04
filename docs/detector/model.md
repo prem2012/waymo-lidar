@@ -33,6 +33,13 @@ Benchmark: `uv run python -m waymo_lidar.det.model --backbone simple resnet18 re
 
 ## Architecture
 
+![Baseline architecture: voxelizer, backbone, neck, head and decode, with tensor shapes, parameters and GFLOPs per block](img/baseline_architecture.png)
+
+The baseline (`runs/baseline`: `simple` backbone, default config), with shapes, parameters and GFLOPs
+measured from the checkpoint ([SVG](img/baseline_architecture.svg)). The neck's 3×3 fuse conv (384 → 128
+channels at 376²) is the single most expensive op: 125 of the model's 386 GFLOPs. It's the first thing to
+slim down if latency matters, e.g. on a Jetson Orin (see [export.md](export.md)).
+
 ```
 BEV (B, C_in, 1504, 1504)
   │

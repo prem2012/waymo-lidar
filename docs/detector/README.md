@@ -98,6 +98,10 @@ engine takes 2.5 ms per frame, against 4.7 ms for PyTorch bf16. To build it on a
 
 ## Design
 
+![Baseline architecture](img/baseline_architecture.png)
+
+The baseline model, block by block, with shapes, parameters and GFLOPs: see [model.md](model.md#architecture).
+
 | Choice | Value | Why |
 |---|---|---|
 | Frame | Vehicle frame at the frame timestamp, for points and boxes: x forward, y left, z up, origin on the ground and most likely below the rear axle ([definition](../dataset.md#coordinate-frames)). The top LiDAR sits at (+1.43, 0, +2.18) m. | Boxes are labelled in this frame, and points are moved into it with rolling-shutter correction, so the two line up with no further transform. |
